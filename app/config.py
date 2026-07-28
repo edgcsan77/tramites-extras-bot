@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     APP_PORT: int = 8110
     PUBLIC_BASE_URL: str = ''
     WEBHOOK_SECRET: str
+    ADMIN_PANEL_TOKEN: str
     DATABASE_URL: str
     REDIS_URL: str
     EVOLUTION_BASE_URL: str
