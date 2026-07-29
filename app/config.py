@@ -16,10 +16,13 @@ class Settings(BaseSettings):
     EVOLUTION_BASE_URL: str
     EVOLUTION_API_KEY: str
 
+    MAIN_INSTANCE: str = 'tramitesextras'
+    PROVIDER_TRANSPORT_INSTANCE: str = 'tramitesextras'
+
     CFE_ENABLED: bool = True
-    CFE_CLIENT_INSTANCES: str = 'cfeclientes'
-    CFE_PROVIDER_INSTANCE: str = 'cfeproveedor'
-    CFE_PROVIDER_GROUP_JID: str
+    CFE_CLIENT_INSTANCES: str = 'tramitesextras'
+    CFE_PROVIDER_INSTANCE: str = ''  # legado: ya no identifica proveedores
+    CFE_PROVIDER_GROUP_JID: str = ''  # legado/fallback mientras se crean proveedores en panel
     CFE_SERVICE_NUMBER_MIN_LEN: int = 8
     CFE_SERVICE_NUMBER_MAX_LEN: int = 20
     CFE_PENDING_TTL_SECONDS: int = 1800
@@ -36,6 +39,10 @@ class Settings(BaseSettings):
     @property
     def cfe_no_record_phrases(self) -> tuple[str, ...]:
         return tuple(x.strip().upper() for x in self.CFE_NO_RECORD_PHRASES.split('|') if x.strip())
+
+    @property
+    def provider_transport_instance(self) -> str:
+        return (self.PROVIDER_TRANSPORT_INSTANCE or self.MAIN_INSTANCE or '').strip()
 
 
 @lru_cache

@@ -5,10 +5,12 @@ from app.config import settings
 from app.db import engine
 from app.modules.cfe.handlers import process_client, process_provider
 from app.panel import router as panel_router
+from app.admin_multibot import router as multibot_router
 from app.webhook_utils import get_instance, get_remote_jid
 
 app = FastAPI(title='Trámites Extras Bot', version='1.1.0')
 app.include_router(panel_router)
+app.include_router(multibot_router)
 
 
 @app.get('/health')

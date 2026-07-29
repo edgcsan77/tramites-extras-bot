@@ -245,10 +245,10 @@ def panel_home(
 
     cfe_queue_data = _queue_info(cfe_queue)
     renapo_queue_data = _queue_info(renapo_queue)
-    instances = sorted(set(settings.cfe_client_instances) | {settings.CFE_PROVIDER_INSTANCE})
+    instances = sorted((set(settings.cfe_client_instances) | {settings.provider_transport_instance}) - {''})
 
     query_base = f"token={_esc(token)}"
-    period_buttons = " ".join([
+    period_buttons = f'<a class="btn green" href="/panel/bots?token={_esc(token)}">Bots / mini paneles</a> <a class="btn green" href="/panel/providers?token={_esc(token)}">Proveedores</a> ' + " ".join([
         f'<a class="btn light" href="/panel?{query_base}&view=day">Hoy</a>',
         f'<a class="btn light" href="/panel?{query_base}&view=30d">30 días</a>',
         f'<a class="btn light" href="/panel?{query_base}&view=month">Mes actual</a>',
@@ -271,7 +271,7 @@ def panel_home(
     )
 
     instance_html = "".join(
-        f"<tr><td>{_esc(inst)}</td><td>{_status_badge(_evolution_state(inst))}</td><td>{'Proveedor CFE' if inst == settings.CFE_PROVIDER_INSTANCE else 'Cliente'}</td></tr>"
+        f"<tr><td>{_esc(inst)}</td><td>{_status_badge(_evolution_state(inst))}</td><td>{'Transporte a proveedores' if inst == settings.provider_transport_instance else 'Cliente'}</td></tr>"
         for inst in instances
     )
 
