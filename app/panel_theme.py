@@ -577,6 +577,198 @@ def panel_css() -> str:
         width: auto;
       }
     }
+
+    .section {
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      border-radius: 16px;
+      margin-bottom: 16px;
+      overflow: hidden;
+      box-shadow:
+        0 6px 20px
+        rgba(15, 23, 42, 0.06);
+    }
+    
+    .collapsible-head {
+      cursor: pointer;
+      user-select: none;
+    }
+    
+    .collapsible-head:hover {
+      background: #f3f4f6;
+    }
+    
+    .collapse-icon {
+      display: inline-block;
+      transition: transform 0.18s ease;
+      margin-right: 6px;
+    }
+    
+    .collapsible-head.closed
+    .collapse-icon {
+      transform: rotate(-90deg);
+    }
+    
+    .collapsible-body.open {
+      display: block;
+    }
+    
+    .collapsible-body.closed {
+      display: none;
+    }
+    
+    .grid-hero {
+      display: grid;
+      grid-template-columns:
+        repeat(
+          4,
+          minmax(0, 1fr)
+        );
+      gap: 12px;
+      margin-top: 18px;
+    }
+    
+    .glass {
+      background:
+        rgba(
+          255,
+          255,
+          255,
+          0.12
+        );
+      border:
+        1px solid
+        rgba(
+          255,
+          255,
+          255,
+          0.18
+        );
+      border-radius: 16px;
+      padding: 14px;
+      backdrop-filter: blur(6px);
+    }
+    
+    .glass .label {
+      color:
+        rgba(
+          255,
+          255,
+          255,
+          0.75
+        );
+    }
+    
+    .glass .value {
+      color: #ffffff;
+    }
+    
+    .wallet-grid {
+      display: grid;
+      grid-template-columns:
+        repeat(
+          2,
+          minmax(0, 1fr)
+        );
+      gap: 12px;
+    }
+    
+    .wallet {
+      border:
+        1px solid
+        #e5e7eb;
+      border-radius: 14px;
+      padding: 14px;
+      background: #f8fafc;
+    }
+    
+    .wallet-title {
+      font-weight: 900;
+      margin-bottom: 9px;
+    }
+    
+    .wallet-values {
+      display: grid;
+      grid-template-columns:
+        repeat(
+          3,
+          minmax(0, 1fr)
+        );
+      gap: 8px;
+    }
+    
+    .wallet-number {
+      background: #ffffff;
+      border:
+        1px solid
+        #e5e7eb;
+      border-radius: 10px;
+      padding: 9px;
+    }
+    
+    .wallet-number span {
+      display: block;
+      color: #6b7280;
+      font-size: 0.72rem;
+      font-weight: 800;
+    }
+    
+    .wallet-number strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 1.15rem;
+    }
+    
+    .status-dot {
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      margin-right: 5px;
+    }
+    
+    .status-dot.on {
+      background: #16a34a;
+    }
+    
+    .status-dot.off {
+      background: #dc2626;
+    }
+    
+    .btn-row {
+      display: flex;
+      gap: 7px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    
+    .notice {
+      border-radius: 12px;
+      padding: 11px 13px;
+      margin-bottom: 12px;
+      background: #eff6ff;
+      color: #1e40af;
+      border: 1px solid #bfdbfe;
+    }
+    
+    @media (max-width: 900px) {
+      .grid-hero,
+      .wallet-grid {
+        grid-template-columns:
+          repeat(
+            2,
+            minmax(0, 1fr)
+          );
+      }
+    }
+    
+    @media (max-width: 640px) {
+      .grid-hero,
+      .wallet-grid,
+      .wallet-values {
+        grid-template-columns: 1fr;
+      }
+    }
     """
 
 
@@ -654,6 +846,42 @@ def page_html(
 
         {body}
       </div>
+
+      <script>
+        function toggleSection(bodyId, head) {{
+          const body =
+            document.getElementById(bodyId);
+
+          if (!body) {{
+            return;
+          }}
+
+          const isOpen =
+            body.classList.contains("open");
+
+          body.classList.toggle(
+            "open",
+            !isOpen
+          );
+
+          body.classList.toggle(
+            "closed",
+            isOpen
+          );
+
+          if (head) {{
+            head.classList.toggle(
+              "open",
+              !isOpen
+            );
+
+            head.classList.toggle(
+              "closed",
+              isOpen
+            );
+          }}
+        }}
+      </script>
     </body>
     </html>
     """
