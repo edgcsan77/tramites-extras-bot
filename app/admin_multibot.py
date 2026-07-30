@@ -20,6 +20,15 @@ from app.panel_theme import (
     badge_html,
     page_html,
 )
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+from app.panel_data import (
+    bot_panel_data,
+    fmt_dt,
+    period_bounds,
+)
+from app.models import ProductRechargeLog
 
 router = APIRouter()
 
@@ -842,12 +851,385 @@ def toggle_provider(provider_id: int, token: str = Depends(_admin), db: Session 
     p.is_enabled = not p.is_enabled; db.commit(); return _go('/panel/providers', token)
 
 
+@router.post(
+    "/botpanel/{panel_token}/bot/toggle"
+)
+def mini_toggle_bot(
+    panel_token: str,
+    db: Session = Depends(get_db),
+):
+    bot = db.scalar(
+        select(
+            BotControl
+        ).where(
+            BotControl.panel_token
+            == panel_token
+        )
+    )
+
+    if not bot:
+        raise HTTPException(
+            404,
+            "Bot no encontrado",
+        )
+
+    bot.is_blocked = (
+        not bot.is_blocked
+    )
+
+    db.commit()
+
+    return RedirectResponse(
+        f"/botpanel/{panel_token}",
+        status_code=303,
+    )
+
+
+@router.post(
+    "/botpanel/{panel_token}/group/add"
+)
+def mini_add_group(
+    panel_token: str,
+    group_jid: str = Form(...),
+    custom_name: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    bot = db.scalar(
+        select(
+            BotControl
+        ).where(
+            BotControl.panel_token
+            == panel_token,
+
+            BotControl.is_active
+            .is_(True),
+        )
+    )
+
+    if not bot:
+        raise HTTPException(
+            404,
+            "Bot no encontrado",
+        )
+
+    group_jid = group_jid.strip()
+
+    if not group_jid.endswith(
+        "@g.us"
+    ):
+        raise HTTPException(
+            400,
+            "group_jid inválido",
+        )
+
+    existing = db.scalar(
+        select(
+            AuthorizedGroup
+        ).where(
+            AuthorizedGroup.group_jid
+            == group_jid
+        )
+    )
+
+    if existing:
+        if (
+            existing.owner_instance
+            != bot.instance_name
+        ):
+            raise HTTPException(
+                409,
+                "El grupo pertenece a otra instancia",
+            )
+
+        existing.is_hidden = False
+        existing.custom_name = (
+            custom_name.strip()
+            or existing.custom_name
+        )
+
+    else:
+        db.add(
+            AuthorizedGroup(
+                group_jid=group_jid,
+                owner_instance=
+                    bot.instance_name,
+                custom_name=
+                    custom_name.strip()
+                    or None,
+            )
+        )
+
+    db.commit()
+
+    return RedirectResponse(
+        f"/botpanel/{panel_token}",
+        status_code=303,
+    )
+
+
+@router.post(
+    "/botpanel/{panel_token}/group/"
+    "{group_jid}/rename"
+)
+def mini_rename_group(
+    panel_token: str,
+    group_jid: str,
+    custom_name: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    bot = db.scalar(
+        select(
+            BotControl
+        ).where(
+            BotControl.panel_token
+            == panel_token
+        )
+    )
+
+    if not bot:
+        raise HTTPException(
+            404,
+            "Bot no encontrado",
+        )
+
+    group = db.scalar(
+        select(
+            AuthorizedGroup
+        ).where(
+            AuthorizedGroup.group_jid
+            == group_jid,
+
+            AuthorizedGroup.owner_instance
+            == bot.instance_name,
+        )
+    )
+
+    if not group:
+        raise HTTPException(
+            404,
+            "Grupo no encontrado",
+        )
+
+    group.custom_name = (
+        custom_name.strip()
+        or None
+    )
+
+    db.commit()
+
+    return RedirectResponse(
+        f"/botpanel/{panel_token}",
+        status_code=303,
+    )
+
+
+@router.post(
+    "/botpanel/{panel_token}/group/"
+    "{group_jid}/toggle"
+)
+def mini_toggle_group(
+    panel_token: str,
+    group_jid: str,
+    db: Session = Depends(get_db),
+):
+    bot = db.scalar(
+        select(
+            BotControl
+        ).where(
+            BotControl.panel_token
+            == panel_token
+        )
+    )
+
+    if not bot:
+        raise HTTPException(
+            404,
+            "Bot no encontrado",
+        )
+
+    group = db.scalar(
+        select(
+            AuthorizedGroup
+        ).where(
+            AuthorizedGroup.group_jid
+            == group_jid,
+
+            AuthorizedGroup.owner_instance
+            == bot.instance_name,
+        )
+    )
+
+    if not group:
+        raise HTTPException(
+            404,
+            "Grupo no encontrado",
+        )
+
+    group.is_blocked = (
+        not group.is_blocked
+    )
+
+    db.commit()
+
+    return RedirectResponse(
+        f"/botpanel/{panel_token}",
+        status_code=303,
+    )
+
+
+@router.post(
+    "/botpanel/{panel_token}/group/"
+    "{group_jid}/hide"
+)
+def mini_hide_group(
+    panel_token: str,
+    group_jid: str,
+    db: Session = Depends(get_db),
+):
+    bot = db.scalar(
+        select(
+            BotControl
+        ).where(
+            BotControl.panel_token
+            == panel_token
+        )
+    )
+
+    if not bot:
+        raise HTTPException(
+            404,
+            "Bot no encontrado",
+        )
+
+    group = db.scalar(
+        select(
+            AuthorizedGroup
+        ).where(
+            AuthorizedGroup.group_jid
+            == group_jid,
+
+            AuthorizedGroup.owner_instance
+            == bot.instance_name,
+        )
+    )
+
+    if not group:
+        raise HTTPException(
+            404,
+            "Grupo no encontrado",
+        )
+
+    group.is_hidden = True
+    db.commit()
+
+    return RedirectResponse(
+        f"/botpanel/{panel_token}",
+        status_code=303,
+    )
+
+
+@router.post(
+    "/botpanel/{panel_token}/recharge/"
+    "{product}"
+)
+def mini_recharge_product(
+    panel_token: str,
+    product: str,
+    amount: int = Form(...),
+    db: Session = Depends(get_db),
+):
+    bot = db.scalar(
+        select(
+            BotControl
+        ).where(
+            BotControl.panel_token
+            == panel_token
+        ).with_for_update()
+    )
+
+    if not bot:
+        raise HTTPException(
+            404,
+            "Bot no encontrado",
+        )
+
+    if amount <= 0:
+        raise HTTPException(
+            400,
+            "Cantidad inválida",
+        )
+
+    product = (
+        product
+        or ""
+    ).strip().upper()
+
+    if product == "CFE":
+        previous = int(
+            bot.cfe_limit or 0
+        )
+
+        bot.cfe_limit = (
+            previous
+            + amount
+        )
+
+        new_limit = bot.cfe_limit
+        used = int(
+            bot.cfe_used or 0
+        )
+
+    elif product == "RENAPO":
+        previous = int(
+            bot.renapo_limit or 0
+        )
+
+        bot.renapo_limit = (
+            previous
+            + amount
+        )
+
+        new_limit = bot.renapo_limit
+        used = int(
+            bot.renapo_used or 0
+        )
+
+    else:
+        raise HTTPException(
+            400,
+            "Producto inválido",
+        )
+
+    db.add(
+        ProductRechargeLog(
+            owner_type="BOT",
+            owner_key=
+                bot.instance_name,
+            product=product,
+            amount=amount,
+            previous_limit=previous,
+            new_limit=new_limit,
+            used_at_recharge=used,
+        )
+    )
+
+    db.commit()
+
+    return RedirectResponse(
+        f"/botpanel/{panel_token}",
+        status_code=303,
+    )
+
+
 @router.get(
     "/botpanel/{panel_token}",
     response_class=HTMLResponse,
 )
 def mini_panel(
     panel_token: str,
+    view: str = "day",
+    date_from: str = "",
+    date_to: str = "",
     db: Session = Depends(get_db),
 ):
     bot = db.scalar(
@@ -866,6 +1248,25 @@ def mini_panel(
             404,
             "Mini panel no encontrado",
         )
+
+    time_min, time_max, view = (
+        period_bounds(
+            view,
+            date_from,
+            date_to,
+        )
+    )
+    
+    data = bot_panel_data(
+        db,
+        bot.instance_name,
+        time_min,
+        time_max,
+    )
+    
+    summary = data["summary"]
+    groups = data["groups"]
+    recent = data["recent"]
 
     groups = list(
         db.scalars(
