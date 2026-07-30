@@ -17,6 +17,7 @@ from app.config import settings
 from app.db import get_db
 from app.models import CfeRequest, RenapoRequest
 from app.queue import cfe_queue, renapo_queue, redis_conn
+from app.panel_theme import panel_css
 
 router = APIRouter()
 PANEL_TZ = ZoneInfo("America/Monterrey")
@@ -145,41 +146,7 @@ def _status_badge(status: str) -> str:
 
 
 def _base_css() -> str:
-    return """
-    :root { --navy:#061533; --navy2:#0b1f4d; --bg:#f4f6f8; --line:#e5e7eb; }
-    * { box-sizing:border-box; }
-    body { margin:0; padding:18px; font-family:Arial,Helvetica,sans-serif; background:var(--bg); color:#111827; }
-    .wrap { max-width:1500px; margin:0 auto; }
-    .hero { background:linear-gradient(135deg,var(--navy),var(--navy2)); color:white; border-radius:22px; padding:22px 24px; box-shadow:0 12px 34px rgba(6,21,51,.22); margin-bottom:18px; }
-    .hero-row { display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; }
-    h1 { margin:0 0 7px; font-size:2rem; } h2,h3 { margin-top:0; }
-    .subtitle { color:rgba(255,255,255,.82); }
-    .nav { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
-    .btn { display:inline-block; border:0; border-radius:11px; padding:10px 14px; font-weight:800; cursor:pointer; text-decoration:none; background:#334155; color:white; }
-    .btn:hover { opacity:.9; } .btn.light { background:white; color:#0f172a; } .btn.green { background:#166534; } .btn.red { background:#b91c1c; }
-    .grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px; margin-bottom:18px; }
-    .stat { background:white; padding:16px; border-radius:17px; box-shadow:0 7px 22px rgba(15,23,42,.07); border:1px solid var(--line); }
-    .stat .label { color:#64748b; font-size:.84rem; } .stat strong { display:block; font-size:1.7rem; margin-top:5px; }
-    .box { background:white; border:1px solid var(--line); border-radius:19px; box-shadow:0 8px 24px rgba(15,23,42,.07); margin-bottom:18px; overflow:hidden; }
-    .head { padding:16px 18px; border-bottom:1px solid var(--line); background:#fafbfc; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
-    .content { padding:16px 18px; }
-    .filters { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:10px; }
-    input,select { width:100%; padding:10px 11px; border:1px solid #cbd5e1; border-radius:10px; background:white; }
-    .table-wrap { overflow:auto; }
-    table { width:100%; border-collapse:collapse; min-width:900px; }
-    th { background:var(--navy); color:white; text-align:left; padding:12px; white-space:nowrap; }
-    td { padding:11px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
-    tbody tr:hover { background:#f8fafc; }
-    .mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.84rem; }
-    .badge { display:inline-flex; border-radius:999px; padding:4px 9px; font-size:.75rem; font-weight:800; }
-    .badge.ok { background:#dcfce7; color:#166534; } .badge.warn { background:#fef3c7; color:#92400e; }
-    .badge.bad { background:#fee2e2; color:#991b1b; } .badge.info { background:#dbeafe; color:#1d4ed8; }
-    .badge.muted { background:#e5e7eb; color:#475569; }
-    .small { font-size:.82rem; color:#64748b; }
-    .two { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
-    @media(max-width:1100px){ .grid{grid-template-columns:repeat(2,1fr)} .filters{grid-template-columns:repeat(2,1fr)} .two{grid-template-columns:1fr} }
-    @media(max-width:600px){ body{padding:10px}.grid,.filters{grid-template-columns:1fr}.hero{border-radius:16px} }
-    """
+    return panel_css()
 
 
 @router.get("/", include_in_schema=False)
@@ -248,12 +215,32 @@ def panel_home(
     instances = sorted((set(settings.cfe_client_instances) | {settings.provider_transport_instance}) - {''})
 
     query_base = f"token={_esc(token)}"
-    period_buttons = f'<a class="btn green" href="/panel/bots?token={_esc(token)}">Bots / mini paneles</a> <a class="btn green" href="/panel/providers?token={_esc(token)}">Proveedores</a> ' + " ".join([
-        f'<a class="btn light" href="/panel?{query_base}&view=day">Hoy</a>',
-        f'<a class="btn light" href="/panel?{query_base}&view=30d">30 días</a>',
-        f'<a class="btn light" href="/panel?{query_base}&view=month">Mes actual</a>',
-        f'<a class="btn light" href="/panel?{query_base}&view=prev_month">Mes anterior</a>',
-    ])
+    period_buttons = (
+        f'<a class="btn btn-green" '
+        f'href="/panel/bots?token={_esc(token)}">'
+        f'Bots / mini paneles</a> '
+    
+        f'<a class="btn btn-green" '
+        f'href="/panel/providers?token={_esc(token)}">'
+        f'Proveedores</a> '
+        + " ".join([
+            f'<a class="btn light" '
+            f'href="/panel?{query_base}&view=day">'
+            f'Hoy</a>',
+    
+            f'<a class="btn light" '
+            f'href="/panel?{query_base}&view=30d">'
+            f'30 días</a>',
+    
+            f'<a class="btn light" '
+            f'href="/panel?{query_base}&view=month">'
+            f'Mes actual</a>',
+    
+            f'<a class="btn light" '
+            f'href="/panel?{query_base}&view=prev_month">'
+            f'Mes anterior</a>',
+        ])
+    )
 
     groups_html = "".join(
         f"<tr><td class='mono'>{_esc(gid)}</td><td>{count}</td><td><a class='btn' href='/panel/group-detail?token={_esc(token)}&group_jid={_esc(gid)}&view={_esc(view)}'>Ver detalle</a></td></tr>"
