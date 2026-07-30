@@ -45,31 +45,212 @@ class RenapoRequest(Base):
 
 
 class BotControl(Base):
-    __tablename__ = 'bot_controls'
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    instance_name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False, index=True)
-    display_name: Mapped[str] = mapped_column(String(180), nullable=False)
-    panel_token: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
-    limit_total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    used_total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    is_blocked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    is_hidden: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    __tablename__ = "bot_controls"
 
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    instance_name: Mapped[str] = mapped_column(
+        String(120),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
+    display_name: Mapped[str] = mapped_column(
+        String(180),
+        nullable=False,
+    )
+
+    panel_token: Mapped[str] = mapped_column(
+        String(100),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
+    # Bolsa general antigua; se conserva por compatibilidad.
+    limit_total: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    used_total: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    # Bolsas separadas adaptadas de RFC.
+    cfe_limit: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    cfe_used: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    renapo_limit: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    renapo_used: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    sale_price_cfe: Mapped[str | None] = mapped_column(
+        String(30),
+        nullable=True,
+    )
+
+    sale_price_renapo: Mapped[str | None] = mapped_column(
+        String(30),
+        nullable=True,
+    )
+
+    private_notify_jid: Mapped[str | None] = mapped_column(
+        String(160),
+        nullable=True,
+    )
+
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+    )
+
+    is_blocked: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    is_hidden: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+    
 
 class AuthorizedGroup(Base):
-    __tablename__ = 'authorized_groups'
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    group_jid: Mapped[str] = mapped_column(String(160), unique=True, nullable=False, index=True)
-    owner_instance: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
-    custom_name: Mapped[str | None] = mapped_column(String(200))
-    is_blocked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    is_hidden: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    __tablename__ = "authorized_groups"
 
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    group_jid: Mapped[str] = mapped_column(
+        String(160),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
+    owner_instance: Mapped[str] = mapped_column(
+        String(120),
+        nullable=False,
+        index=True,
+    )
+
+    custom_name: Mapped[str | None] = mapped_column(
+        String(200),
+    )
+
+    category: Mapped[str | None] = mapped_column(
+        String(80),
+        nullable=True,
+    )
+
+    price_cfe: Mapped[str | None] = mapped_column(
+        String(30),
+        nullable=True,
+    )
+
+    price_renapo: Mapped[str | None] = mapped_column(
+        String(30),
+        nullable=True,
+    )
+
+    cfe_limit: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    cfe_used: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    renapo_limit: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    renapo_used: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    is_blocked: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    is_hidden: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    hidden_in_main: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+    
 
 class ProviderSetting(Base):
     __tablename__ = 'provider_settings'
@@ -95,3 +276,62 @@ class BotRechargeLog(Base):
     new_limit: Mapped[int] = mapped_column(Integer, nullable=False)
     used_at_recharge: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class ProductRechargeLog(Base):
+    __tablename__ = "product_recharge_logs"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    owner_type: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        index=True,
+    )
+
+    owner_key: Mapped[str] = mapped_column(
+        String(160),
+        nullable=False,
+        index=True,
+    )
+
+    product: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        index=True,
+    )
+
+    amount: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    previous_limit: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    new_limit: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    used_at_recharge: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    note: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+        index=True,
+    )
