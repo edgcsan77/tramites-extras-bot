@@ -35,6 +35,19 @@ def get_participant(payload: dict) -> str:
     return str(key.get('participant') or data.get('participant') or '').strip()
 
 
+def get_participant_alt(
+    payload: dict,
+) -> str:
+    key = get_key(payload)
+    data = get_data(payload)
+
+    return str(
+        key.get("participantAlt")
+        or data.get("participantAlt")
+        or ""
+    ).strip()
+
+
 def get_push_name(payload: dict) -> str:
     data = get_data(payload)
     return str(data.get('pushName') or payload.get('pushName') or 'Cliente').strip()
