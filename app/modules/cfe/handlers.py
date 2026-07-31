@@ -12,6 +12,7 @@ from app.modules.cfe.parser import (
     extract_service_numbers,
     extract_service_number_from_pdf,
     extract_service_number_from_status_text,
+    extract_service_numbers_from_status_text,
     text_is_deregistered,
     text_is_no_record,
 )
@@ -910,6 +911,10 @@ def process_provider(
     # Si el proveedor no citó, pero escribió algo como:
     # 331150802454 Dado de baja
     # buscamos la solicitud pendiente por el número.
+    status_requests: list[
+        tuple[str, dict]
+    ] = []
+
     if (
         not quoted_id
         and (
@@ -918,90 +923,157 @@ def process_provider(
         )
     ):
         (
-            status_service_number,
+            status_service_numbers,
             status_number_error,
-        ) = extract_service_number_from_status_text(
+        ) = extract_service_numbers_from_status_text(
             text
         )
-    
-        if not status_number_error:
-            key, pending = (
+
+        if status_number_error:
+            return {
+                "ok": True,
+                "ignored":
+                    "status_service_numbers_not_found",
+
+                "error":
+                    status_number_error,
+            }
+
+        for status_service_number in (
+            status_service_numbers
+        ):
+            found_key, found_pending = (
                 _find_pending_by_service_number(
                     status_service_number,
                     remote_jid,
                 )
             )
-    
-            if not key or not pending:
+
+            if (
+                found_key
+                and found_pending
+            ):
+                status_requests.append(
+                    (
+                        found_key,
+                        found_pending,
+                    )
+                )
+            else:
                 print(
                     "CFE_PROVIDER_STATUS_NO_PENDING",
                     {
                         "service_number":
                             status_service_number,
-    
+
                         "provider_group_jid":
                             remote_jid,
-    
+
                         "text":
                             text,
                     },
                     flush=True,
                 )
-    
-                return {
-                    "ok": True,
-                    "ignored":
-                        "no_pending_for_status_service",
-    
-                    "service_number":
-                        status_service_number,
-                }
 
     # ==================================================
     # 2. Servicio dado de baja
     # ==================================================
     
     if is_deregistered:
-        # Citado:
-        #   responde "Dado de baja"
-        #
-        # No citado:
-        #   331150802454 Dado de baja
-    
-        if not key:
+        # Caso citado: una sola solicitud.
+        if quoted_id:
+            if not key:
+                return {
+                    "ok": True,
+                    "ignored":
+                        "deregistered_request_not_found",
+                }
+
+            if not pending:
+                return {
+                    "ok": True,
+                    "ignored":
+                        "pending_expired",
+                }
+
+            service_number = pending[
+                "service_number"
+            ]
+
+            return _complete_text_provider_result(
+                key=key,
+                pending=pending,
+                response_message_id=
+                    response_message_id,
+
+                status="DEREGISTERED",
+
+                client_message=(
+                    f"⚠️ "
+                    f"{pending['requester_name']}, "
+                    "el proveedor informó que el "
+                    f"servicio {service_number} "
+                    "está dado de baja."
+                ),
+            )
+
+        # Caso no citado: admite lista.
+        if not status_requests:
             return {
                 "ok": True,
                 "ignored":
-                    "deregistered_request_not_found",
+                    "deregistered_requests_not_found",
             }
-    
-        if not pending:
-            return {
-                "ok": True,
-                "ignored":
-                    "pending_expired",
-            }
-    
-        service_number = pending[
-            "service_number"
-        ]
-    
-        return _complete_text_provider_result(
-            key=key,
-            pending=pending,
-            response_message_id=
-                response_message_id,
-    
-            status="DEREGISTERED",
-    
-            client_message=(
-                f"⚠️ "
-                f"{pending['requester_name']}, "
-                "el proveedor informó que el "
-                f"servicio {service_number} "
-                "está dado de baja."
-            ),
-        )
+
+        completed: list[str] = []
+
+        for (
+            status_key,
+            status_pending,
+        ) in status_requests:
+            service_number = (
+                status_pending[
+                    "service_number"
+                ]
+            )
+
+            result = (
+                _complete_text_provider_result(
+                    key=status_key,
+                    pending=status_pending,
+                    response_message_id=(
+                        f"{response_message_id}:"
+                        f"{service_number}"
+                    ),
+                    status="DEREGISTERED",
+                    client_message=(
+                        f"⚠️ "
+                        f"{status_pending['requester_name']}, "
+                        "el proveedor informó que el "
+                        f"servicio {service_number} "
+                        "está dado de baja."
+                    ),
+                )
+            )
+
+            if result.get(
+                "status"
+            ) == "DEREGISTERED":
+                completed.append(
+                    service_number
+                )
+
+        return {
+            "ok": True,
+            "status":
+                "DEREGISTERED_BATCH",
+
+            "completed":
+                completed,
+
+            "total":
+                len(completed),
+        }
 
     # ==================================================
     # 3. Respuesta textual "sin recibo"
