@@ -1,5 +1,3 @@
-import re
-
 from sqlalchemy import select
 
 from app.config import settings
@@ -24,74 +22,6 @@ def _normalize_command(text: str) -> str:
     # /addgroup@NombreDelBot
     # /groupid@NombreDelBot
     return value.split("@", 1)[0]
-
-
-def _digits(value: str) -> str:
-    return re.sub(
-        r"\D+",
-        "",
-        str(value or ""),
-    )
-
-
-def _is_admin(payload: dict) -> bool:
-    configured = _digits(
-        settings.ADMIN_PHONE
-    )
-
-    if not configured:
-        return False
-
-    candidates = {
-        _digits(
-            get_participant(payload)
-        ),
-        _digits(
-            get_participant_alt(payload)
-        ),
-    }
-
-    candidates.discard("")
-
-    # Admite el número mexicano:
-    # 521XXXXXXXXXX
-    # 52XXXXXXXXXX
-    # XXXXXXXXXX
-    aliases = {configured}
-
-    if (
-        configured.startswith("521")
-        and len(configured) == 13
-    ):
-        aliases.add(
-            configured[3:]
-        )
-        aliases.add(
-            "52" + configured[3:]
-        )
-
-    elif (
-        configured.startswith("52")
-        and len(configured) == 12
-    ):
-        aliases.add(
-            configured[2:]
-        )
-        aliases.add(
-            "521" + configured[2:]
-        )
-
-    elif len(configured) == 10:
-        aliases.add(
-            "52" + configured
-        )
-        aliases.add(
-            "521" + configured
-        )
-
-    return bool(
-        candidates & aliases
-    )
 
 
 def _instance_is_usable(
@@ -155,12 +85,6 @@ def process_group_command(
     Procesa /groupid y /addgroup antes
     del flujo normal de solicitudes CFE.
     """
-
-    if get_from_me(payload):
-        return {
-            "ok": True,
-            "ignored": "not_group_command",
-        }
 
     remote_jid = get_remote_jid(
         payload
@@ -240,22 +164,21 @@ def process_group_command(
             "instance": instance,
         }
 
-    if not _is_admin(payload):
+    if not get_from_me(payload):
         send_text(
             remote_jid,
             (
-                "⛔ Solo el administrador "
-                "configurado puede usar "
-                "/addgroup."
+                "⛔ /addgroup solo puede ejecutarlo "
+                "el número conectado a esta instancia."
             ),
             instance,
         )
-
+    
         return {
             "ok": True,
             "command": "addgroup",
             "authorized": False,
-            "reason": "not_admin",
+            "reason": "not_instance_owner",
         }
 
     with SessionLocal() as db:
