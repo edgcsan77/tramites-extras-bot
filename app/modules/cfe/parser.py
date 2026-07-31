@@ -49,6 +49,101 @@ def extract_service_number(text: str) -> tuple[str, str | None]:
     return candidate, None
 
 
+def extract_service_numbers(
+    text: str,
+) -> tuple[list[str], str | None]:
+    """
+    Extrae uno o varios números de servicio CFE.
+
+    Admite:
+    386060102151
+    416130801830
+    386070464948
+
+    También admite separación por:
+    espacios, comas, saltos de línea y guiones simples.
+    """
+
+    raw = str(
+        text or ""
+    ).strip()
+
+    if not raw:
+        return (
+            [],
+            "Envía uno o varios números de servicio CFE.",
+        )
+
+    min_len = (
+        settings.CFE_SERVICE_NUMBER_MIN_LEN
+    )
+
+    max_len = (
+        settings.CFE_SERVICE_NUMBER_MAX_LEN
+    )
+
+    number_groups = re.findall(
+        r"\d+",
+        raw,
+    )
+
+    valid_values: list[str] = []
+
+    for group in number_groups:
+        if (
+            min_len
+            <= len(group)
+            <= max_len
+        ):
+            valid_values.append(
+                group
+            )
+
+    # Elimina repetidos conservando el orden.
+    unique_values = list(
+        dict.fromkeys(
+            valid_values
+        )
+    )
+
+    if not unique_values:
+        return (
+            [],
+            "No encontré números de servicio CFE válidos.",
+        )
+
+    # Retira todos los números válidos para revisar
+    # que no haya texto extraño.
+    remainder = raw
+
+    for value in unique_values:
+        remainder = remainder.replace(
+            value,
+            "",
+            1,
+        )
+
+    # Separadores admitidos entre números:
+    # espacios, saltos de línea, coma, punto y coma,
+    # guion, punto, slash y numeración tipo "1)".
+    remainder = re.sub(
+        r"[\s,;:\-._/|()]+",
+        "",
+        remainder,
+    )
+
+    if remainder:
+        return (
+            [],
+            (
+                "Envía únicamente números de "
+                "servicio CFE, uno por línea."
+            ),
+        )
+
+    return unique_values, None
+
+
 def text_is_no_record(text: str) -> bool:
     upper = str(text or "").upper()
 
