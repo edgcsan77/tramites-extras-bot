@@ -27,6 +27,10 @@ from app.admin_multibot import (
     router as multibot_router,
 )
 
+from app.group_commands import (
+    process_group_command,
+)
+
 from app.webhook_utils import (
     get_instance,
     get_remote_jid,
