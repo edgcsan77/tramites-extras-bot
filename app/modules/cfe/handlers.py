@@ -11,6 +11,8 @@ from app.modules.cfe.parser import (
     extract_service_number,
     extract_service_numbers,
     extract_service_number_from_pdf,
+    extract_service_number_from_status_text,
+    text_is_deregistered,
     text_is_no_record,
 )
 from app.queue import redis_conn
@@ -69,6 +71,109 @@ def _find_pending_by_service_number(
             )
 
     return "", {}
+
+
+def _complete_text_provider_result(
+    *,
+    key: str,
+    pending: dict,
+    response_message_id: str,
+    status: str,
+    client_message: str,
+) -> dict:
+    """
+    Entrega al cliente un resultado textual
+    del proveedor y cierra la solicitud.
+    """
+
+    if not claim_delivery(
+        key
+    ):
+        return {
+            "ok": True,
+            "ignored": "already_claimed",
+        }
+
+    try:
+        send_text(
+            pending[
+                "client_group_jid"
+            ],
+            client_message,
+            pending[
+                "client_instance"
+            ],
+        )
+
+    except Exception:
+        # Permite que el proveedor reintente
+        # si falló el aviso al cliente.
+        redis_conn.delete(
+            f"extras:cfe:delivery-claim:{key}"
+        )
+        raise
+
+    with SessionLocal() as db:
+        row = db.scalar(
+            select(
+                CfeRequest
+            )
+            .where(
+                CfeRequest.request_key
+                == key
+            )
+            .with_for_update()
+        )
+
+        if row:
+            row.status = status
+
+            row.provider_response_message_id = (
+                response_message_id
+            )
+
+            row.completed_at = datetime.now(
+                timezone.utc
+            )
+
+            db.commit()
+
+    finish(
+        key,
+        pending.get(
+            "provider_message_id",
+            "",
+        ),
+    )
+
+    print(
+        "CFE_TEXT_RESULT_DONE",
+        {
+            "request_key":
+                key,
+
+            "service_number":
+                pending[
+                    "service_number"
+                ],
+
+            "status":
+                status,
+
+            "provider_response_message_id":
+                response_message_id,
+        },
+        flush=True,
+    )
+
+    return {
+        "ok": True,
+        "status": status,
+        "service_number":
+            pending[
+                "service_number"
+            ],
+    }
 
 
 def _send_provider_text_with_retry(
@@ -762,13 +867,26 @@ def process_provider(
             if value.strip()
         )
 
+    is_deregistered = (
+        text_is_deregistered(
+            text
+        )
+    )
+    
     is_no_record = (
-        text_is_no_record(text)
-        or any(
-            phrase
-            in str(text or '').upper()
-            for phrase
-            in custom_phrases
+        not is_deregistered
+        and (
+            text_is_no_record(
+                text
+            )
+            or any(
+                phrase
+                in str(
+                    text or ""
+                ).upper()
+                for phrase
+                in custom_phrases
+            )
         )
     )
 
@@ -789,90 +907,143 @@ def process_provider(
                 key
             )
 
-    # ==================================================
-    # 2. Respuesta textual "sin recibo"
-    # ==================================================
-
-    if is_no_record:
-        # Para respuestas de "no encontrado",
-        # seguimos exigiendo cita porque un texto
-        # sin número no permite saber qué solicitud
-        # debe cerrarse.
-        if not quoted_id:
-            return {
-                'ok': True,
-                'ignored':
-                    'no_record_without_quote',
-            }
-
-        if not key:
-            return {
-                'ok': True,
-                'ignored':
-                    'quote_not_associated',
-            }
-
-        if not pending:
-            return {
-                'ok': True,
-                'ignored':
-                    'pending_expired',
-            }
-
-        if not claim_delivery(key):
-            return {
-                'ok': True,
-                'ignored':
-                    'already_claimed',
-            }
-
-        send_text(
-            pending['client_group_jid'],
-            (
-                f"⚠️ "
-                f"{pending['requester_name']}, "
-                "el proveedor no encontró "
-                "recibo para "
-                f"{pending['service_number']}."
-            ),
-            pending['client_instance'],
+    # Si el proveedor no citó, pero escribió algo como:
+    # 331150802454 Dado de baja
+    # buscamos la solicitud pendiente por el número.
+    if (
+        not quoted_id
+        and (
+            is_deregistered
+            or is_no_record
         )
-
-        with SessionLocal() as db:
-            row = db.scalar(
-                select(CfeRequest).where(
-                    CfeRequest.request_key
-                    == key
+    ):
+        (
+            status_service_number,
+            status_number_error,
+        ) = extract_service_number_from_status_text(
+            text
+        )
+    
+        if not status_number_error:
+            key, pending = (
+                _find_pending_by_service_number(
+                    status_service_number,
+                    remote_jid,
                 )
             )
-
-            if row:
-                row.status = 'NO_RECORD'
-
-                row.provider_response_message_id = (
-                    response_message_id
+    
+            if not key or not pending:
+                print(
+                    "CFE_PROVIDER_STATUS_NO_PENDING",
+                    {
+                        "service_number":
+                            status_service_number,
+    
+                        "provider_group_jid":
+                            remote_jid,
+    
+                        "text":
+                            text,
+                    },
+                    flush=True,
                 )
+    
+                return {
+                    "ok": True,
+                    "ignored":
+                        "no_pending_for_status_service",
+    
+                    "service_number":
+                        status_service_number,
+                }
 
-                row.completed_at = (
-                    datetime.now(
-                        timezone.utc
-                    )
-                )
-
-                db.commit()
-
-        finish(
-            key,
-            pending.get(
-                'provider_message_id',
-                '',
+    # ==================================================
+    # 2. Servicio dado de baja
+    # ==================================================
+    
+    if is_deregistered:
+        # Citado:
+        #   responde "Dado de baja"
+        #
+        # No citado:
+        #   331150802454 Dado de baja
+    
+        if not key:
+            return {
+                "ok": True,
+                "ignored":
+                    "deregistered_request_not_found",
+            }
+    
+        if not pending:
+            return {
+                "ok": True,
+                "ignored":
+                    "pending_expired",
+            }
+    
+        service_number = pending[
+            "service_number"
+        ]
+    
+        return _complete_text_provider_result(
+            key=key,
+            pending=pending,
+            response_message_id=
+                response_message_id,
+    
+            status="DEREGISTERED",
+    
+            client_message=(
+                f"⚠️ "
+                f"{pending['requester_name']}, "
+                "el proveedor informó que el "
+                f"servicio {service_number} "
+                "está dado de baja."
             ),
         )
 
+    if is_no_record:
+    # Citado:
+    #   responde "No hay recibo"
+    #
+    # No citado:
+    #   331150802454 No hay recibo
+
+    if not key:
         return {
-            'ok': True,
-            'status': 'NO_RECORD',
+            "ok": True,
+            "ignored":
+                "no_record_request_not_found",
         }
+
+    if not pending:
+        return {
+            "ok": True,
+            "ignored":
+                "pending_expired",
+        }
+
+    service_number = pending[
+        "service_number"
+    ]
+
+    return _complete_text_provider_result(
+        key=key,
+        pending=pending,
+        response_message_id=
+            response_message_id,
+
+        status="NO_RECORD",
+
+        client_message=(
+            f"⚠️ "
+            f"{pending['requester_name']}, "
+            "el proveedor no encontró "
+            "recibo para el servicio "
+            f"{service_number}."
+        ),
+    )
 
     # ==================================================
     # 3. La respuesta debe contener un documento PDF
