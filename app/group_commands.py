@@ -15,13 +15,24 @@ from app.webhook_utils import (
 )
 
 
-def _normalize_command(text: str) -> str:
-    value = str(text or "").strip().split(maxsplit=1)[0].lower()
+def _normalize_command(
+    text: str,
+) -> str:
+    value = str(
+        text or ""
+    ).strip()
 
-    # También admite:
-    # /addgroup@NombreDelBot
-    # /groupid@NombreDelBot
-    return value.split("@", 1)[0]
+    if not value:
+        return ""
+
+    first_token = value.split(
+        maxsplit=1
+    )[0].lower()
+
+    return first_token.split(
+        "@",
+        1,
+    )[0]
 
 
 def _instance_is_usable(
