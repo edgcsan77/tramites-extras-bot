@@ -258,7 +258,11 @@ def _send_single_client_request(
                     instance,
 
                 "client_message_id":
-                    message_id,
+                    (
+                        f"{message_id}:"
+                        f"{item_index}:"
+                        f"{service_number}"
+                    ),
 
                 "provider_name":
                     provider.provider_name,
@@ -316,9 +320,34 @@ def _send_single_client_request(
 
             except Exception as exc:
                 db.rollback()
-
+            
                 last_error = str(
                     exc
+                )
+            
+                print(
+                    "CFE_REQUEST_DB_OR_SEND_FAILED",
+                    {
+                        "exception_type":
+                            type(exc).__name__,
+            
+                        "provider":
+                            provider.provider_name,
+            
+                        "service_number":
+                            service_number,
+            
+                        "client_message_id":
+                            (
+                                f"{message_id}:"
+                                f"{item_index}:"
+                                f"{service_number}"
+                            ),
+            
+                        "error":
+                            last_error,
+                    },
+                    flush=True,
                 )
 
                 print(
