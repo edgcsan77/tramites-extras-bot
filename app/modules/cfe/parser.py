@@ -153,6 +153,97 @@ def text_is_no_record(text: str) -> bool:
     )
 
 
+def text_is_deregistered(
+    text: str,
+) -> bool:
+    """
+    Detecta respuestas del proveedor indicando
+    que el servicio CFE está dado de baja.
+    """
+
+    upper = str(
+        text or ""
+    ).upper()
+
+    normalized = re.sub(
+        r"\s+",
+        " ",
+        upper,
+    ).strip()
+
+    phrases = (
+        "DADO DE BAJA",
+        "DADA DE BAJA",
+        "SERVICIO DADO DE BAJA",
+        "SERVICIO DADA DE BAJA",
+        "ESTA DADO DE BAJA",
+        "ESTÁ DADO DE BAJA",
+        "BAJA DEFINITIVA",
+    )
+
+    return any(
+        phrase in normalized
+        for phrase in phrases
+    )
+
+
+def extract_service_number_from_status_text(
+    text: str,
+) -> tuple[str, str | None]:
+    """
+    Extrae el número incluido en una respuesta
+    textual del proveedor.
+
+    Ejemplos:
+        331150802454 Dado de baja
+        Dado de baja 331150802454
+        331150802454 - DADO DE BAJA
+    """
+
+    raw = str(
+        text or ""
+    ).strip()
+
+    min_len = (
+        settings.CFE_SERVICE_NUMBER_MIN_LEN
+    )
+
+    max_len = (
+        settings.CFE_SERVICE_NUMBER_MAX_LEN
+    )
+
+    candidates = re.findall(
+        rf"(?<!\d)\d{{{min_len},{max_len}}}(?!\d)",
+        raw,
+    )
+
+    unique_values = list(
+        dict.fromkeys(
+            candidates
+        )
+    )
+
+    if not unique_values:
+        return (
+            "",
+            (
+                "La respuesta no incluye un "
+                "número de servicio CFE."
+            ),
+        )
+
+    if len(unique_values) > 1:
+        return (
+            "",
+            (
+                "La respuesta incluye más de un "
+                "número de servicio CFE."
+            ),
+        )
+
+    return unique_values[0], None
+
+
 def extract_service_number_from_pdf(
     pdf_bytes: bytes,
 ) -> tuple[str, str | None]:
