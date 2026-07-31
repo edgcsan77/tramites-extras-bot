@@ -244,6 +244,53 @@ def extract_service_number_from_status_text(
     return unique_values[0], None
 
 
+def extract_service_numbers_from_status_text(
+    text: str,
+) -> tuple[list[str], str | None]:
+    """
+    Extrae uno o varios números de servicio
+    desde respuestas de estado del proveedor.
+
+    Ejemplos:
+        331820950671 dado de baja
+        000120950622 dado de baja
+    """
+
+    raw = str(
+        text or ""
+    ).strip()
+
+    min_len = (
+        settings.CFE_SERVICE_NUMBER_MIN_LEN
+    )
+
+    max_len = (
+        settings.CFE_SERVICE_NUMBER_MAX_LEN
+    )
+
+    candidates = re.findall(
+        rf"(?<!\d)\d{{{min_len},{max_len}}}(?!\d)",
+        raw,
+    )
+
+    unique_values = list(
+        dict.fromkeys(
+            candidates
+        )
+    )
+
+    if not unique_values:
+        return (
+            [],
+            (
+                "La respuesta no incluye números "
+                "de servicio CFE."
+            ),
+        )
+
+    return unique_values, None
+
+
 def extract_service_number_from_pdf(
     pdf_bytes: bytes,
 ) -> tuple[str, str | None]:
