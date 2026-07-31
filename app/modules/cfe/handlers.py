@@ -1080,47 +1080,101 @@ def process_provider(
     # ==================================================
 
     if is_no_record:
-        # Citado:
-        #   responde "No hay recibo"
-        #
-        # No citado:
-        #   331150802454 No hay recibo
+        # Caso citado: una sola solicitud.
+        if quoted_id:
+            if not key:
+                return {
+                    "ok": True,
+                    "ignored":
+                        "no_record_request_not_found",
+                }
 
-        if not key:
+            if not pending:
+                return {
+                    "ok": True,
+                    "ignored":
+                        "pending_expired",
+                }
+
+            service_number = pending[
+                "service_number"
+            ]
+
+            return _complete_text_provider_result(
+                key=key,
+                pending=pending,
+                response_message_id=
+                    response_message_id,
+
+                status="NO_RECORD",
+
+                client_message=(
+                    f"⚠️ "
+                    f"{pending['requester_name']}, "
+                    "el proveedor no encontró "
+                    "recibo para el servicio "
+                    f"{service_number}."
+                ),
+            )
+
+        # Caso no citado: uno o varios números.
+        if not status_requests:
             return {
                 "ok": True,
                 "ignored":
-                    "no_record_request_not_found",
+                    "no_record_requests_not_found",
             }
 
-        if not pending:
-            return {
-                "ok": True,
-                "ignored":
-                    "pending_expired",
-            }
+        completed: list[str] = []
 
-        service_number = pending[
-            "service_number"
-        ]
+        for (
+            status_key,
+            status_pending,
+        ) in status_requests:
+            service_number = (
+                status_pending[
+                    "service_number"
+                ]
+            )
 
-        return _complete_text_provider_result(
-            key=key,
-            pending=pending,
-            response_message_id=
-                response_message_id,
+            result = (
+                _complete_text_provider_result(
+                    key=status_key,
+                    pending=status_pending,
+                    response_message_id=(
+                        f"{response_message_id}:"
+                        f"{service_number}"
+                    ),
+                    status="NO_RECORD",
+                    client_message=(
+                        f"⚠️ "
+                        f"{status_pending['requester_name']}, "
+                        "el proveedor no encontró "
+                        "recibo para el servicio "
+                        f"{service_number}."
+                    ),
+                )
+            )
 
-            status="NO_RECORD",
+            if result.get(
+                "status"
+            ) == "NO_RECORD":
+                completed.append(
+                    service_number
+                )
 
-            client_message=(
-                f"⚠️ "
-                f"{pending['requester_name']}, "
-                "el proveedor no encontró "
-                "recibo para el servicio "
-                f"{service_number}."
-            ),
-        )
+        return {
+            "ok": True,
+            "status":
+                "NO_RECORD_BATCH",
 
+            "completed":
+                completed,
+
+            "total":
+                len(completed),
+        }
+        
     # ==================================================
     # 4. La respuesta debe contener un documento PDF
     # ==================================================
