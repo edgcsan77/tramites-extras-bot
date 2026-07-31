@@ -39,16 +39,44 @@ def process_client(payload: dict) -> dict:
         if not group_ok:
             return {'ok': True, 'ignored': group_reason}
 
+    text = get_text(payload).strip()
+
+    # Ignora conversaciones normales del grupo:
+    # ".", "hola", "gracias", emojis, etc.
+    # Solo intenta procesar mensajes que contengan al menos un número.
+    if not any(char.isdigit() for char in text):
+        return {
+            'ok': True,
+            'ignored': 'non_numeric_chat_message',
+        }
+    
     dedupe = f'extras:cfe:input:{instance}:{message_id}'
     if not redis_conn.set(dedupe, '1', nx=True, ex=86400):
-        return {'ok': True, 'ignored': 'duplicate'}
-
-    service_number, error = extract_service_number(get_text(payload))
-    requester = get_participant(payload) or remote_jid
+        return {
+            'ok': True,
+            'ignored': 'duplicate',
+        }
+    
+    service_number, error = extract_service_number(text)
+    
+    requester = (
+        get_participant(payload)
+        or remote_jid
+    )
+    
     requester_name = get_push_name(payload)
+    
     if error:
-        send_text(remote_jid, f'⚠️ {requester_name}, {error}', instance)
-        return {'ok': True, 'validation_error': error}
+        send_text(
+            remote_jid,
+            f'⚠️ {requester_name}, {error}',
+            instance,
+        )
+    
+        return {
+            'ok': True,
+            'validation_error': error,
+        }
 
     key = request_key(instance, remote_jid, message_id)
     transport_instance = settings.provider_transport_instance
