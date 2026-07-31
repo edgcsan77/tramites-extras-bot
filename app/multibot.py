@@ -34,17 +34,47 @@ def client_instance_allowed(db: Session, instance: str) -> tuple[bool, str]:
     return True, 'ok'
 
 
-def claim_or_validate_group(db: Session, group_jid: str, instance: str) -> tuple[bool, str]:
-    row = db.scalar(select(AuthorizedGroup).where(AuthorizedGroup.group_jid == group_jid))
+def claim_or_validate_group(
+    db: Session,
+    group_jid: str,
+    instance: str,
+) -> tuple[bool, str]:
+    """
+    Solo valida grupos previamente autorizados.
+
+    Un grupo nuevo no se registra automáticamente
+    cuando manda un número de servicio. Debe
+    autorizarse con /addgroup o desde el panel.
+    """
+
+    row = db.scalar(
+        select(
+            AuthorizedGroup
+        ).where(
+            AuthorizedGroup.group_jid
+            == group_jid
+        )
+    )
+
     if row is None:
-        db.add(AuthorizedGroup(group_jid=group_jid, owner_instance=instance))
-        db.commit()
-        return True, 'created'
+        return (
+            False,
+            "group_not_authorized",
+        )
+
     if row.owner_instance != instance:
-        return False, 'group_owned_by_other_instance'
+        return (
+            False,
+            "group_owned_by_other_instance",
+        )
+
     if row.is_blocked:
-        return False, 'group_blocked'
-    return True, 'ok'
+        return (
+            False,
+            "group_blocked",
+        )
+
+    return True, "ok"
 
 
 def enabled_cfe_providers(db: Session) -> list[ProviderSetting]:
