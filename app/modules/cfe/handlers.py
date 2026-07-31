@@ -1,4 +1,5 @@
 import base64
+import time
 from datetime import datetime, timezone
 from sqlalchemy import select
 from app.config import settings
@@ -68,6 +69,96 @@ def _find_pending_by_service_number(
             )
 
     return "", {}
+
+
+def _send_provider_text_with_retry(
+    *,
+    provider_group_jid: str,
+    service_number: str,
+    transport_instance: str,
+    max_attempts: int = 3,
+) -> tuple[dict, str]:
+    """
+    Envía un número al proveedor con reintentos.
+
+    Retorna:
+        (respuesta_de_evolution, provider_message_id)
+    """
+
+    last_error: Exception | None = None
+
+    for attempt in range(
+        1,
+        max_attempts + 1,
+    ):
+        try:
+            response = send_text(
+                provider_group_jid,
+                service_number,
+                transport_instance,
+            )
+
+            provider_message_id = (
+                extract_sent_message_id(
+                    response
+                )
+            )
+
+            if not provider_message_id:
+                raise RuntimeError(
+                    "PROVIDER_MESSAGE_ID_EMPTY"
+                )
+
+            print(
+                "CFE_PROVIDER_SEND_ATTEMPT_OK",
+                {
+                    "service_number":
+                        service_number,
+
+                    "attempt":
+                        attempt,
+
+                    "provider_message_id":
+                        provider_message_id,
+                },
+                flush=True,
+            )
+
+            return (
+                response,
+                provider_message_id,
+            )
+
+        except Exception as exc:
+            last_error = exc
+
+            print(
+                "CFE_PROVIDER_SEND_ATTEMPT_FAILED",
+                {
+                    "service_number":
+                        service_number,
+
+                    "attempt":
+                        attempt,
+
+                    "max_attempts":
+                        max_attempts,
+
+                    "error":
+                        str(exc),
+                },
+                flush=True,
+            )
+
+            if attempt < max_attempts:
+                time.sleep(
+                    1.0 * attempt
+                )
+
+    raise RuntimeError(
+        "PROVIDER_SEND_FAILED_AFTER_RETRIES: "
+        f"{last_error}"
+    )
 
 
 def _send_single_client_request(
@@ -180,22 +271,21 @@ def _send_single_client_request(
             }
 
             try:
-                response = send_text(
-                    provider.group_jid,
-                    service_number,
-                    transport_instance,
+                (
+                    response,
+                    provider_message_id,
+                ) = _send_provider_text_with_retry(
+                    provider_group_jid=
+                        provider.group_jid,
+                
+                    service_number=
+                        service_number,
+                
+                    transport_instance=
+                        transport_instance,
+                
+                    max_attempts=3,
                 )
-
-                provider_message_id = (
-                    extract_sent_message_id(
-                        response
-                    )
-                )
-
-                if not provider_message_id:
-                    raise RuntimeError(
-                        "PROVIDER_MESSAGE_ID_EMPTY"
-                    )
 
                 row = CfeRequest(
                     **pending,
@@ -446,26 +536,31 @@ def process_client(
         service_numbers,
         start=1,
     ):
+        # Evita mandar varios mensajes a Evolution
+        # exactamente en el mismo instante.
+        if index > 1:
+            time.sleep(0.8)
+    
         result = (
             _send_single_client_request(
                 instance=
                     instance,
-
+    
                 remote_jid=
                     remote_jid,
-
+    
                 message_id=
                     message_id,
-
+    
                 service_number=
                     service_number,
-
+    
                 requester=
                     requester,
-
+    
                 requester_name=
                     requester_name,
-
+    
                 item_index=
                     index,
             )
@@ -534,6 +629,24 @@ def process_client(
             ),
             instance,
         )
+
+    print(
+        "CFE_BATCH_RESULT",
+        {
+            "message_id":
+                message_id,
+    
+            "requested":
+                service_numbers,
+    
+            "successful":
+                successful,
+    
+            "failed":
+                failed,
+        },
+        flush=True,
+    )
 
     return {
         "ok": bool(
