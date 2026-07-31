@@ -101,6 +101,17 @@ async def evolution_webhook(
         flush=True,
     )
 
+    command_result = (
+        process_group_command(
+            payload
+        )
+    )
+    
+    if not command_result.get(
+        "ignored"
+    ):
+        return command_result
+
     provider_result = process_provider(
         payload
     )
