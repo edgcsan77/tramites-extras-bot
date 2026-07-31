@@ -8,6 +8,7 @@ from app.multibot import claim_or_validate_group, client_instance_allowed, enabl
 from app.modules.cfe.flow import associate_provider_message, claim_delivery, finish, load_pending, request_key, resolve_by_provider_message, save_pending
 from app.modules.cfe.parser import (
     extract_service_number,
+    extract_service_numbers,
     extract_service_number_from_pdf,
     text_is_no_record,
 )
@@ -69,133 +70,488 @@ def _find_pending_by_service_number(
     return "", {}
 
 
-def process_client(payload: dict) -> dict:
-    instance = get_instance(payload)
-    remote_jid = get_remote_jid(payload)
-    message_id = get_message_id(payload)
-    if get_from_me(payload) or not remote_jid.endswith('@g.us'):
-        return {'ok': True, 'ignored': 'not_client_request'}
+def _send_single_client_request(
+    *,
+    instance: str,
+    remote_jid: str,
+    message_id: str,
+    service_number: str,
+    requester: str,
+    requester_name: str,
+    item_index: int,
+) -> dict:
+    """
+    Crea y envía una solicitud individual dentro
+    de un mensaje que puede contener varios servicios.
+    """
+
+    key = request_key(
+        instance,
+        remote_jid,
+        (
+            f"{message_id}:"
+            f"{item_index}:"
+            f"{service_number}"
+        ),
+    )
+
+    transport_instance = (
+        settings.provider_transport_instance
+    )
+
+    if not transport_instance:
+        raise RuntimeError(
+            "PROVIDER_TRANSPORT_INSTANCE_EMPTY"
+        )
+
+    with SessionLocal() as db:
+        providers = enabled_cfe_providers(
+            db
+        )
+
+        # Compatibilidad con proveedor del .env.
+        if (
+            not providers
+            and settings.CFE_PROVIDER_GROUP_JID
+        ):
+            providers = [
+                type(
+                    "LegacyProvider",
+                    (),
+                    {
+                        "provider_name":
+                            "cfe_legacy",
+
+                        "display_name":
+                            "CFE principal",
+
+                        "group_jid":
+                            settings
+                            .CFE_PROVIDER_GROUP_JID,
+                    },
+                )()
+            ]
+
+        if not providers:
+            return {
+                "ok": False,
+                "service_number":
+                    service_number,
+
+                "error":
+                    "no_provider_enabled",
+            }
+
+        row = None
+        last_error = None
+        pending = {}
+
+        for provider in providers:
+            pending = {
+                "request_key":
+                    key,
+
+                "service_number":
+                    service_number,
+
+                "requester_wa_id":
+                    requester,
+
+                "requester_name":
+                    requester_name,
+
+                "client_group_jid":
+                    remote_jid,
+
+                "client_instance":
+                    instance,
+
+                "client_message_id":
+                    message_id,
+
+                "provider_name":
+                    provider.provider_name,
+
+                "provider_group_jid":
+                    provider.group_jid,
+
+                "provider_instance":
+                    transport_instance,
+            }
+
+            try:
+                response = send_text(
+                    provider.group_jid,
+                    service_number,
+                    transport_instance,
+                )
+
+                provider_message_id = (
+                    extract_sent_message_id(
+                        response
+                    )
+                )
+
+                if not provider_message_id:
+                    raise RuntimeError(
+                        "PROVIDER_MESSAGE_ID_EMPTY"
+                    )
+
+                row = CfeRequest(
+                    **pending,
+                    provider_message_id=
+                        provider_message_id,
+                    status=
+                        "WAITING_PROVIDER",
+                )
+
+                db.add(row)
+                db.commit()
+
+                associate_provider_message(
+                    key,
+                    provider_message_id,
+                )
+
+                pending[
+                    "provider_message_id"
+                ] = provider_message_id
+
+                save_pending(
+                    key,
+                    pending,
+                )
+
+                break
+
+            except Exception as exc:
+                db.rollback()
+
+                last_error = str(
+                    exc
+                )
+
+                print(
+                    "CFE_PROVIDER_SEND_FAILED",
+                    {
+                        "provider":
+                            provider.provider_name,
+
+                        "service_number":
+                            service_number,
+
+                        "error":
+                            last_error,
+                    },
+                    flush=True,
+                )
+
+        if row is None:
+            return {
+                "ok": False,
+                "service_number":
+                    service_number,
+
+                "error":
+                    last_error
+                    or "provider_send_failed",
+            }
+
+    print(
+        "CFE_SENT_TO_PROVIDER",
+        {
+            "request_key":
+                key,
+
+            "service_number":
+                service_number,
+
+            "provider":
+                pending[
+                    "provider_name"
+                ],
+
+            "provider_message_id":
+                pending[
+                    "provider_message_id"
+                ],
+        },
+        flush=True,
+    )
+
+    return {
+        "ok": True,
+        "request_key":
+            key,
+
+        "service_number":
+            service_number,
+
+        "provider":
+            pending[
+                "provider_name"
+            ],
+    }
+
+
+def process_client(
+    payload: dict,
+) -> dict:
+    instance = get_instance(
+        payload
+    )
+
+    remote_jid = get_remote_jid(
+        payload
+    )
+
+    message_id = get_message_id(
+        payload
+    )
+
+    if (
+        get_from_me(payload)
+        or not remote_jid.endswith(
+            "@g.us"
+        )
+    ):
+        return {
+            "ok": True,
+            "ignored":
+                "not_client_request",
+        }
 
     with SessionLocal() as db:
         provider = provider_by_group(
             db,
             remote_jid,
         )
-    
+
         legacy_provider_group = bool(
             settings.CFE_PROVIDER_GROUP_JID
             and remote_jid
             == settings.CFE_PROVIDER_GROUP_JID
         )
-    
-        # El grupo proveedor nunca debe entrar
-        # como grupo cliente, esté registrado
-        # en SQL o configurado mediante .env.
-        if provider or legacy_provider_group:
+
+        # Nunca interpretar el grupo proveedor
+        # como grupo cliente.
+        if (
+            provider
+            or legacy_provider_group
+        ):
             return {
-                'ok': True,
-                'ignored': 'provider_group',
+                "ok": True,
+                "ignored":
+                    "provider_group",
             }
-        allowed, reason = client_instance_allowed(db, instance)
+
+        allowed, reason = (
+            client_instance_allowed(
+                db,
+                instance,
+            )
+        )
+
         if not allowed:
-            return {'ok': True, 'ignored': reason}
-        group_ok, group_reason = claim_or_validate_group(db, remote_jid, instance)
+            return {
+                "ok": True,
+                "ignored":
+                    reason,
+            }
+
+        group_ok, group_reason = (
+            claim_or_validate_group(
+                db,
+                remote_jid,
+                instance,
+            )
+        )
+
         if not group_ok:
-            return {'ok': True, 'ignored': group_reason}
+            return {
+                "ok": True,
+                "ignored":
+                    group_reason,
+            }
 
-    text = get_text(payload).strip()
+    text = get_text(
+        payload
+    ).strip()
 
-    # Ignora conversaciones normales del grupo:
-    # ".", "hola", "gracias", emojis, etc.
-    # Solo intenta procesar mensajes que contengan al menos un número.
-    if not any(char.isdigit() for char in text):
+    # Ignora conversación normal:
+    # ".", "hola", emojis, etc.
+    if not any(
+        char.isdigit()
+        for char in text
+    ):
         return {
-            'ok': True,
-            'ignored': 'non_numeric_chat_message',
+            "ok": True,
+            "ignored":
+                "non_numeric_chat_message",
         }
-    
-    dedupe = f'extras:cfe:input:{instance}:{message_id}'
-    if not redis_conn.set(dedupe, '1', nx=True, ex=86400):
+
+    dedupe = (
+        f"extras:cfe:input:"
+        f"{instance}:{message_id}"
+    )
+
+    if not redis_conn.set(
+        dedupe,
+        "1",
+        nx=True,
+        ex=86400,
+    ):
         return {
-            'ok': True,
-            'ignored': 'duplicate',
+            "ok": True,
+            "ignored":
+                "duplicate",
         }
-    
-    service_number, error = extract_service_number(text)
-    
+
+    service_numbers, error = (
+        extract_service_numbers(
+            text
+        )
+    )
+
     requester = (
         get_participant(payload)
         or remote_jid
     )
-    
-    requester_name = get_push_name(payload)
-    
+
+    requester_name = (
+        get_push_name(payload)
+    )
+
     if error:
         send_text(
             remote_jid,
-            f'⚠️ {requester_name}, {error}',
+            (
+                f"⚠️ {requester_name}, "
+                f"{error}"
+            ),
             instance,
         )
-    
+
         return {
-            'ok': True,
-            'validation_error': error,
+            "ok": True,
+            "validation_error":
+                error,
         }
 
-    key = request_key(instance, remote_jid, message_id)
-    transport_instance = settings.provider_transport_instance
-    if not transport_instance:
-        raise RuntimeError('PROVIDER_TRANSPORT_INSTANCE_EMPTY')
+    successful: list[str] = []
+    failed: list[str] = []
+    request_keys: list[str] = []
 
-    with SessionLocal() as db:
-        providers = enabled_cfe_providers(db)
-        # Compatibilidad inicial: permite operar con el grupo del .env antes de crear proveedores.
-        if not providers and settings.CFE_PROVIDER_GROUP_JID:
-            providers = [type('LegacyProvider', (), {
-                'provider_name': 'cfe_legacy', 'display_name': 'CFE principal',
-                'group_jid': settings.CFE_PROVIDER_GROUP_JID
-            })()]
-        if not providers:
-            send_text(remote_jid, f'⚠️ {requester_name}, no hay proveedor CFE habilitado.', instance)
-            return {'ok': True, 'ignored': 'no_provider_enabled'}
+    for index, service_number in enumerate(
+        service_numbers,
+        start=1,
+    ):
+        result = (
+            _send_single_client_request(
+                instance=
+                    instance,
 
-        row = None
-        last_error = None
-        for provider in providers:
-            pending = {
-                'request_key': key, 'service_number': service_number,
-                'requester_wa_id': requester, 'requester_name': requester_name,
-                'client_group_jid': remote_jid, 'client_instance': instance,
-                'client_message_id': message_id,
-                'provider_name': provider.provider_name,
-                'provider_group_jid': provider.group_jid,
-                'provider_instance': transport_instance,
-            }
-            try:
-                response = send_text(provider.group_jid, service_number, transport_instance)
-                provider_message_id = extract_sent_message_id(response)
-                if not provider_message_id:
-                    raise RuntimeError('PROVIDER_MESSAGE_ID_EMPTY')
-                row = CfeRequest(**pending, provider_message_id=provider_message_id, status='WAITING_PROVIDER')
-                db.add(row)
-                db.commit()
-                associate_provider_message(key, provider_message_id)
-                pending['provider_message_id'] = provider_message_id
-                save_pending(key, pending)
-                break
-            except Exception as exc:
-                db.rollback()
-                last_error = str(exc)
-                print('CFE_PROVIDER_SEND_FAILED', {'provider': provider.provider_name, 'error': last_error}, flush=True)
+                remote_jid=
+                    remote_jid,
 
-        if row is None:
-            send_text(remote_jid, f'⚠️ {requester_name}, no fue posible enviar la solicitud a los proveedores.', instance)
-            return {'ok': True, 'status': 'ERROR', 'error': last_error}
+                message_id=
+                    message_id,
 
-    send_text(remote_jid, f'⚡ {requester_name}, solicitud recibida para el servicio {service_number}.', instance)
-    print('CFE_SENT_TO_PROVIDER', {'request_key': key, 'provider': pending['provider_name'], 'provider_message_id': pending['provider_message_id']}, flush=True)
-    return {'ok': True, 'request_key': key}
+                service_number=
+                    service_number,
 
+                requester=
+                    requester,
+
+                requester_name=
+                    requester_name,
+
+                item_index=
+                    index,
+            )
+        )
+
+        if result.get(
+            "ok"
+        ):
+            successful.append(
+                service_number
+            )
+
+            request_keys.append(
+                result[
+                    "request_key"
+                ]
+            )
+
+        else:
+            failed.append(
+                service_number
+            )
+
+    if successful:
+        if len(successful) == 1:
+            confirmation = (
+                f"⚡ {requester_name}, "
+                "solicitud recibida para el "
+                f"servicio {successful[0]}."
+            )
+
+        else:
+            services_text = "\n".join(
+                f"• {value}"
+                for value
+                in successful
+            )
+
+            confirmation = (
+                f"⚡ {requester_name}, "
+                f"recibí {len(successful)} "
+                "solicitudes CFE:\n"
+                f"{services_text}"
+            )
+
+        send_text(
+            remote_jid,
+            confirmation,
+            instance,
+        )
+
+    if failed:
+        failed_text = "\n".join(
+            f"• {value}"
+            for value
+            in failed
+        )
+
+        send_text(
+            remote_jid,
+            (
+                f"⚠️ {requester_name}, "
+                "no fue posible enviar estas "
+                "solicitudes al proveedor:\n"
+                f"{failed_text}"
+            ),
+            instance,
+        )
+
+    return {
+        "ok": bool(
+            successful
+        ),
+        "total":
+            len(service_numbers),
+
+        "successful":
+            successful,
+
+        "failed":
+            failed,
+
+        "request_keys":
+            request_keys,
+    }
+    
 
 def process_provider(
     payload: dict,
