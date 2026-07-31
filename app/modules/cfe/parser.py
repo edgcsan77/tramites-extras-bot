@@ -1,4 +1,7 @@
 import re
+from io import BytesIO
+
+from pypdf import PdfReader
 
 from app.config import settings
 
@@ -52,4 +55,108 @@ def text_is_no_record(text: str) -> bool:
     return any(
         phrase in upper
         for phrase in settings.cfe_no_record_phrases
+    )
+
+
+def extract_service_number_from_pdf(
+    pdf_bytes: bytes,
+) -> tuple[str, str | None]:
+    """
+    Extrae el número de servicio desde un recibo CFE PDF.
+
+    Admite formatos como:
+    NO. DE SERVICIO:386170901440
+    NO DE SERVICIO 386170901440
+    NUMERO DE SERVICIO: 386170901440
+    """
+
+    if not pdf_bytes.startswith(b"%PDF"):
+        return "", "El documento recibido no es un PDF válido."
+
+    try:
+        reader = PdfReader(
+            BytesIO(pdf_bytes)
+        )
+
+        pages_text: list[str] = []
+
+        for page in reader.pages:
+            text = page.extract_text() or ""
+
+            if text:
+                pages_text.append(text)
+
+        full_text = "\n".join(
+            pages_text
+        )
+
+    except Exception as exc:
+        print(
+            "CFE_PDF_TEXT_EXTRACTION_FAILED",
+            {
+                "error": str(exc),
+            },
+            flush=True,
+        )
+
+        return (
+            "",
+            "No fue posible leer el PDF recibido.",
+        )
+
+    # Búsqueda principal: etiqueta de CFE.
+    patterns = (
+        r"""
+        NO\.?\s*
+        (?:DE\s*)?
+        SERVICIO
+        \s*[:#\-]?\s*
+        (\d{8,20})
+        """,
+        r"""
+        N[ÚU]MERO\s*
+        (?:DE\s*)?
+        SERVICIO
+        \s*[:#\-]?\s*
+        (\d{8,20})
+        """,
+    )
+
+    for pattern in patterns:
+        match = re.search(
+            pattern,
+            full_text,
+            flags=re.IGNORECASE
+            | re.VERBOSE,
+        )
+
+        if match:
+            return match.group(1), None
+
+    # Fallback específico de la línea inferior
+    # de algunos recibos CFE:
+    # 01 386170901440 260726 ...
+    fallback = re.search(
+        r"""
+        (?:^|\n)
+        \s*01\s+
+        (\d{8,20})
+        \s+
+        \d{6}
+        \s+
+        \d+
+        """,
+        full_text,
+        flags=re.VERBOSE,
+    )
+
+    if fallback:
+        return fallback.group(1), None
+
+    return (
+        "",
+        (
+            "No encontré el número de servicio "
+            "dentro del PDF."
+        ),
     )
