@@ -1003,50 +1003,54 @@ def process_provider(
             ),
         )
 
+    # ==================================================
+    # 3. Respuesta textual "sin recibo"
+    # ==================================================
+
     if is_no_record:
-    # Citado:
-    #   responde "No hay recibo"
-    #
-    # No citado:
-    #   331150802454 No hay recibo
+        # Citado:
+        #   responde "No hay recibo"
+        #
+        # No citado:
+        #   331150802454 No hay recibo
 
-    if not key:
-        return {
-            "ok": True,
-            "ignored":
-                "no_record_request_not_found",
-        }
+        if not key:
+            return {
+                "ok": True,
+                "ignored":
+                    "no_record_request_not_found",
+            }
 
-    if not pending:
-        return {
-            "ok": True,
-            "ignored":
-                "pending_expired",
-        }
+        if not pending:
+            return {
+                "ok": True,
+                "ignored":
+                    "pending_expired",
+            }
 
-    service_number = pending[
-        "service_number"
-    ]
+        service_number = pending[
+            "service_number"
+        ]
 
-    return _complete_text_provider_result(
-        key=key,
-        pending=pending,
-        response_message_id=
-            response_message_id,
+        return _complete_text_provider_result(
+            key=key,
+            pending=pending,
+            response_message_id=
+                response_message_id,
 
-        status="NO_RECORD",
+            status="NO_RECORD",
 
-        client_message=(
-            f"⚠️ "
-            f"{pending['requester_name']}, "
-            "el proveedor no encontró "
-            "recibo para el servicio "
-            f"{service_number}."
-        ),
-    )
+            client_message=(
+                f"⚠️ "
+                f"{pending['requester_name']}, "
+                "el proveedor no encontró "
+                "recibo para el servicio "
+                f"{service_number}."
+            ),
+        )
 
     # ==================================================
-    # 3. La respuesta debe contener un documento PDF
+    # 4. La respuesta debe contener un documento PDF
     # ==================================================
 
     doc = get_document(payload)
@@ -1061,7 +1065,7 @@ def process_provider(
         }
 
     # ==================================================
-    # 4. Descargar el PDF recibido
+    # 5. Descargar el PDF recibido
     # ==================================================
 
     media = get_media_base64(
@@ -1100,7 +1104,7 @@ def process_provider(
         )
 
     # ==================================================
-    # 5. Si no venía citado, leer el número del PDF
+    # 6. Si no venía citado, leer el número del PDF
     # ==================================================
 
     pdf_service_number = ""
@@ -1171,7 +1175,7 @@ def process_provider(
             }
 
     # ==================================================
-    # 6. Validar que el PDF corresponda a la solicitud
+    # 7. Validar que el PDF corresponda a la solicitud
     # ==================================================
 
     if not pdf_service_number:
@@ -1222,7 +1226,7 @@ def process_provider(
             }
 
     # ==================================================
-    # 7. Reclamar y entregar una sola vez
+    # 8. Reclamar y entregar una sola vez
     # ==================================================
 
     if not claim_delivery(key):
