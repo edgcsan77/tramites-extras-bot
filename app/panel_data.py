@@ -286,6 +286,7 @@ def group_rows(
             "cfe": 0,
             "renapo": 0,
             "last_update": None,
+            "owner_instance_from_request": "",
         }
     )
 
@@ -294,7 +295,7 @@ def group_rows(
         ("RENAPO", renapo_rows),
     ):
         for row in rows:
-            group_jid = (
+            group_jid = str(
                 row.client_group_jid
                 or ""
             ).strip()
@@ -311,16 +312,31 @@ def group_rows(
                 product.lower()
             ] += 1
 
-            if row.status == "DONE":
+            if not item[
+                "owner_instance_from_request"
+            ]:
+                item[
+                    "owner_instance_from_request"
+                ] = str(
+                    row.client_instance
+                    or ""
+                ).strip()
+
+            status = str(
+                row.status
+                or ""
+            ).strip().upper()
+
+            if status == "DONE":
                 item["done"] += 1
 
-            elif row.status in PENDING_STATUSES:
+            elif status in PENDING_STATUSES:
                 item["pending"] += 1
 
-            elif row.status == "ERROR":
+            elif status == "ERROR":
                 item["errors"] += 1
 
-            elif row.status == "NO_RECORD":
+            elif status == "NO_RECORD":
                 item["no_record"] += 1
 
             updated = (
@@ -334,49 +350,110 @@ def group_rows(
                     "updated_at",
                     None,
                 )
-                or row.created_at
+                or getattr(
+                    row,
+                    "created_at",
+                    None,
+                )
             )
 
             if (
-                not item["last_update"]
-                or updated
-                > item["last_update"]
+                updated
+                and (
+                    not item[
+                        "last_update"
+                    ]
+                    or updated
+                    > item[
+                        "last_update"
+                    ]
+                )
             ):
                 item[
                     "last_update"
                 ] = updated
 
-    group_ids = list(
-        requests_by_group
+    # Todos los grupos autorizados de la
+    # instancia principal, aunque hoy tengan 0.
+    configured_rows = list(
+        db.scalars(
+            select(
+                AuthorizedGroup
+            ).where(
+                AuthorizedGroup.owner_instance
+                == "tramitesextras",
+
+                AuthorizedGroup.is_hidden
+                .is_(False),
+            ).order_by(
+                AuthorizedGroup.created_at.asc()
+            )
+        ).all()
     )
 
-    configured_rows = []
-
-    if group_ids:
-        configured_rows = list(
-            db.scalars(
-                select(
-                    AuthorizedGroup
-                ).where(
-                    AuthorizedGroup.group_jid
-                    .in_(group_ids)
-                )
-            ).all()
-        )
-
     configured = {
-        row.group_jid: row
+        str(
+            row.group_jid
+            or ""
+        ).strip(): row
         for row in configured_rows
+        if str(
+            row.group_jid
+            or ""
+        ).strip()
     }
+
+    all_group_ids = set(
+        requests_by_group.keys()
+    )
+
+    all_group_ids.update(
+        configured.keys()
+    )
 
     result = []
 
-    for group_jid, stats in (
-        requests_by_group.items()
-    ):
-        row = configured.get(
-            group_jid
+    for group_jid in all_group_ids:
+        configured_group = (
+            configured.get(
+                group_jid
+            )
         )
+
+        stats = requests_by_group.get(
+            group_jid,
+            {
+                "total": 0,
+                "done": 0,
+                "pending": 0,
+                "errors": 0,
+                "no_record": 0,
+                "cfe": 0,
+                "renapo": 0,
+                "last_update": None,
+                "owner_instance_from_request": "",
+            },
+        )
+
+        owner_instance = (
+            str(
+                configured_group.owner_instance
+                or ""
+            ).strip()
+            if configured_group
+            else str(
+                stats.get(
+                    "owner_instance_from_request",
+                    "",
+                )
+                or ""
+            ).strip()
+        )
+
+        # El panel principal solo muestra
+        # grupos pertenecientes a tramitesextras.
+        if owner_instance != "tramitesextras":
+            continue
 
         result.append({
             "group_jid":
@@ -384,91 +461,171 @@ def group_rows(
 
             "group_name":
                 (
-                    row.custom_name
-                    if row
-                    and row.custom_name
-                    else group_jid
-                ),
+                    str(
+                        configured_group.custom_name
+                        or ""
+                    ).strip()
+                    if configured_group
+                    else ""
+                )
+                or group_jid,
 
             "owner_instance":
-                (
-                    row.owner_instance
-                    if row
-                    else ""
-                ),
+                owner_instance,
 
             "category":
                 (
-                    row.category
-                    if row
+                    str(
+                        configured_group.category
+                        or ""
+                    ).strip()
+                    if configured_group
                     else ""
                 ),
 
             "blocked":
                 bool(
-                    row.is_blocked
+                    configured_group.is_blocked
                 )
-                if row
+                if configured_group
                 else False,
 
             "hidden":
                 bool(
-                    row.hidden_in_main
+                    configured_group.hidden_in_main
                 )
-                if row
+                if configured_group
                 else False,
 
             "price_cfe":
-                row.price_cfe
-                if row
-                else None,
+                (
+                    configured_group.price_cfe
+                    if configured_group
+                    else None
+                ),
 
             "price_renapo":
-                row.price_renapo
-                if row
-                else None,
+                (
+                    configured_group.price_renapo
+                    if configured_group
+                    else None
+                ),
 
             "cfe_limit":
                 int(
-                    row.cfe_limit or 0
+                    configured_group.cfe_limit
+                    or 0
                 )
-                if row
+                if configured_group
                 else 0,
 
             "cfe_used":
                 int(
-                    row.cfe_used or 0
+                    configured_group.cfe_used
+                    or 0
                 )
-                if row
+                if configured_group
                 else 0,
 
             "renapo_limit":
                 int(
-                    row.renapo_limit or 0
+                    configured_group.renapo_limit
+                    or 0
                 )
-                if row
+                if configured_group
                 else 0,
 
             "renapo_used":
                 int(
-                    row.renapo_used or 0
+                    configured_group.renapo_used
+                    or 0
                 )
-                if row
+                if configured_group
                 else 0,
 
-            **stats,
+            "total":
+                int(
+                    stats.get(
+                        "total",
+                        0,
+                    )
+                    or 0
+                ),
+
+            "done":
+                int(
+                    stats.get(
+                        "done",
+                        0,
+                    )
+                    or 0
+                ),
+
+            "pending":
+                int(
+                    stats.get(
+                        "pending",
+                        0,
+                    )
+                    or 0
+                ),
+
+            "errors":
+                int(
+                    stats.get(
+                        "errors",
+                        0,
+                    )
+                    or 0
+                ),
+
+            "no_record":
+                int(
+                    stats.get(
+                        "no_record",
+                        0,
+                    )
+                    or 0
+                ),
+
+            "cfe":
+                int(
+                    stats.get(
+                        "cfe",
+                        0,
+                    )
+                    or 0
+                ),
+
+            "renapo":
+                int(
+                    stats.get(
+                        "renapo",
+                        0,
+                    )
+                    or 0
+                ),
+
+            "last_update":
+                stats.get(
+                    "last_update"
+                ),
         })
 
     result = [
-        row
-        for row in result
-        if not row["hidden"]
+        item
+        for item in result
+        if not item["hidden"]
     ]
 
     result.sort(
-        key=lambda row: (
-            -row["done"],
-            row["group_name"].lower(),
+        key=lambda item: (
+            str(
+                item.get(
+                    "group_name",
+                    "",
+                )
+            ).lower()
         )
     )
 
