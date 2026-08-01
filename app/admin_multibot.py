@@ -38,6 +38,9 @@ from app.panel_data import (
     period_bounds,
 )
 from app.models import ProductRechargeLog
+from app.broadcast_jobs import (
+    send_instance_broadcast_job,
+)
 
 router = APIRouter()
 
@@ -1226,6 +1229,111 @@ def mini_toggle_bot(
 
     return RedirectResponse(
         f"/botpanel/{panel_token}",
+        status_code=303,
+    )
+
+
+@router.post(
+    "/botpanel/{panel_token}/broadcast"
+)
+def mini_panel_broadcast(
+    panel_token: str,
+    message: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Encola una difusión usando la instancia
+    correspondiente al mini panel.
+    """
+
+    bot = db.scalar(
+        select(
+            BotControl
+        ).where(
+            BotControl.panel_token
+            == panel_token,
+
+            BotControl.is_active
+            .is_(True),
+        )
+    )
+
+    if not bot:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Mini panel no encontrado."
+            ),
+        )
+
+    if bot.is_blocked:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "El bot está apagado o bloqueado."
+            ),
+        )
+
+    message = str(
+        message
+        or ""
+    ).strip()
+
+    if not message:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Escribe el mensaje "
+                "que deseas enviar."
+            ),
+        )
+
+    if len(message) > 3500:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "El mensaje no puede superar "
+                "3500 caracteres."
+            ),
+        )
+
+    job = cfe_queue.enqueue(
+        send_instance_broadcast_job,
+        kwargs={
+            "instance_name":
+                bot.instance_name,
+
+            "message":
+                message,
+        },
+        job_timeout=900,
+        result_ttl=86400,
+        failure_ttl=86400,
+    )
+
+    print(
+        "EXTRAS_MINI_BROADCAST_ENQUEUED",
+        {
+            "job_id":
+                job.id,
+
+            "instance":
+                bot.instance_name,
+
+            "panel_token_prefix":
+                panel_token[:8],
+
+            "message_length":
+                len(message),
+        },
+        flush=True,
+    )
+
+    return RedirectResponse(
+        url=(
+            f"/botpanel/{panel_token}"
+            "?broadcast=queued"
+        ),
         status_code=303,
     )
 
