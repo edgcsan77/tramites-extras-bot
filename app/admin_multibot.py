@@ -114,21 +114,55 @@ def bots_panel(
                 "success",
             )
 
-        if bot.limit_total == 0:
-            limit_text = "Ilimitado"
-            available_text = "Ilimitado"
-        else:
-            limit_text = str(
-                bot.limit_total
-            )
-
-            available_text = str(
+        cfe_limit = int(
+            bot.cfe_limit or 0
+        )
+        
+        cfe_used = int(
+            bot.cfe_used or 0
+        )
+        
+        renapo_limit = int(
+            bot.renapo_limit or 0
+        )
+        
+        renapo_used = int(
+            bot.renapo_used or 0
+        )
+        
+        cfe_limit_text = (
+            "Ilimitado"
+            if cfe_limit == 0
+            else str(cfe_limit)
+        )
+        
+        cfe_available_text = (
+            "Ilimitado"
+            if cfe_limit == 0
+            else str(
                 max(
                     0,
-                    bot.limit_total
-                    - bot.used_total,
+                    cfe_limit - cfe_used,
                 )
             )
+        )
+        
+        renapo_limit_text = (
+            "Ilimitado"
+            if renapo_limit == 0
+            else str(renapo_limit)
+        )
+        
+        renapo_available_text = (
+            "Ilimitado"
+            if renapo_limit == 0
+            else str(
+                max(
+                    0,
+                    renapo_limit - renapo_used,
+                )
+            )
+        )
 
         rows.append(
             f"""
@@ -156,17 +190,36 @@ def bots_panel(
 
               <td>
                 <strong>
-                  {bot.used_total}
+                  CFE: {cfe_used}
                 </strong>
-
+            
                 <div class="small">
-                  Límite:
-                  {_e(limit_text)}
+                  Límite CFE:
+                  {_e(cfe_limit_text)}
                 </div>
-
+            
                 <div class="small">
-                  Disponible:
-                  {_e(available_text)}
+                  Disponible CFE:
+                  {_e(cfe_available_text)}
+                </div>
+            
+                <div
+                  class="small"
+                  style="margin-top:8px"
+                >
+                  <strong>
+                    RENAPO: {renapo_used}
+                  </strong>
+                </div>
+            
+                <div class="small">
+                  Límite RENAPO:
+                  {_e(renapo_limit_text)}
+                </div>
+            
+                <div class="small">
+                  Disponible RENAPO:
+                  {_e(renapo_available_text)}
                 </div>
               </td>
 
@@ -217,6 +270,19 @@ def bots_panel(
                     action="/panel/instance/{_e(bot.instance_name)}/recharge?token={_e(token)}"
                     class="inline-form"
                   >
+                    <select
+                      name="product"
+                      required
+                    >
+                      <option value="CFE">
+                        CFE
+                      </option>
+                
+                      <option value="RENAPO">
+                        RENAPO
+                      </option>
+                    </select>
+                
                     <input
                       name="amount"
                       type="number"
@@ -224,7 +290,7 @@ def bots_panel(
                       placeholder="Cantidad"
                       required
                     >
-
+                
                     <button
                       class="btn btn-success btn-sm"
                       type="submit"
@@ -540,14 +606,103 @@ def toggle(instance_name: str, token: str = Depends(_admin), db: Session = Depen
     bot.is_blocked = not bot.is_blocked; db.commit(); return _go('/panel/bots', token)
 
 
-@router.post('/panel/instance/{instance_name}/recharge')
-def recharge(instance_name: str, amount: int = Form(...), token: str = Depends(_admin), db: Session = Depends(get_db)):
-    bot = db.scalar(select(BotControl).where(BotControl.instance_name == instance_name).with_for_update())
-    if not bot: raise HTTPException(404, 'Bot no encontrado')
-    if amount <= 0: raise HTTPException(400, 'Monto inválido')
-    previous = bot.limit_total; bot.limit_total += amount
-    db.add(BotRechargeLog(instance_name=instance_name, amount=amount, previous_limit=previous, new_limit=bot.limit_total, used_at_recharge=bot.used_total))
-    db.commit(); return _go('/panel/bots', token)
+@router.post(
+    "/panel/instance/{instance_name}/recharge"
+)
+def recharge(
+    instance_name: str,
+    product: str = Form(...),
+    amount: int = Form(...),
+    token: str = Depends(_admin),
+    db: Session = Depends(get_db),
+):
+    bot = db.scalar(
+        select(
+            BotControl
+        ).where(
+            BotControl.instance_name
+            == instance_name
+        ).with_for_update()
+    )
+
+    if not bot:
+        raise HTTPException(
+            404,
+            "Bot no encontrado",
+        )
+
+    if amount <= 0:
+        raise HTTPException(
+            400,
+            "Monto inválido",
+        )
+
+    product = (
+        product
+        or ""
+    ).strip().upper()
+
+    if product == "CFE":
+        previous_limit = int(
+            bot.cfe_limit or 0
+        )
+
+        used_at_recharge = int(
+            bot.cfe_used or 0
+        )
+
+        bot.cfe_limit = (
+            previous_limit
+            + amount
+        )
+
+        new_limit = int(
+            bot.cfe_limit
+        )
+
+    elif product == "RENAPO":
+        previous_limit = int(
+            bot.renapo_limit or 0
+        )
+
+        used_at_recharge = int(
+            bot.renapo_used or 0
+        )
+
+        bot.renapo_limit = (
+            previous_limit
+            + amount
+        )
+
+        new_limit = int(
+            bot.renapo_limit
+        )
+
+    else:
+        raise HTTPException(
+            400,
+            "Producto inválido",
+        )
+
+    db.add(
+        ProductRechargeLog(
+            owner_type="BOT",
+            owner_key=bot.instance_name,
+            product=product,
+            amount=amount,
+            previous_limit=previous_limit,
+            new_limit=new_limit,
+            used_at_recharge=used_at_recharge,
+            note="Recarga desde panel principal",
+        )
+    )
+
+    db.commit()
+
+    return _go(
+        "/panel/bots",
+        token,
+    )
 
 
 @router.get(
