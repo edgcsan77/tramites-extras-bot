@@ -1,6 +1,8 @@
 import html
 import secrets
 
+from urllib.parse import quote
+
 from collections import (
     Counter,
     defaultdict,
@@ -200,6 +202,123 @@ def panel_home(
         providers=providers, provider_stats=data["providers"], queue_rows=[_queue_info(cfe_queue), _queue_info(renapo_queue)],
         evolution_rows=[{"instance_name": instance_name, "state": _evolution_state(instance_name), "role": "Transporte a proveedores"}],
     ))
+
+
+@router.post(
+    "/panel/groups/add"
+)
+def add_group_from_main_panel(
+    group_jid: str = Form(...),
+    custom_name: str = Form(""),
+    category: str = Form("Otro"),
+    token: str = Depends(
+        require_panel_token
+    ),
+    db: Session = Depends(get_db),
+):
+    """
+    Agrega o actualiza manualmente un grupo
+    de la instancia principal tramitesextras.
+    """
+
+    group_jid = str(
+        group_jid
+        or ""
+    ).strip()
+
+    custom_name = str(
+        custom_name
+        or ""
+    ).strip()
+
+    category = str(
+        category
+        or "Otro"
+    ).strip()
+
+    if not group_jid.endswith(
+        "@g.us"
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "El Group JID debe terminar "
+                "en @g.us."
+            ),
+        )
+
+    valid_categories = {
+        "CFE",
+        "RENAPO",
+        "IMSS",
+        "MULTI",
+        "PRUEBAS",
+        "Otro",
+    }
+
+    if category not in valid_categories:
+        category = "Otro"
+
+    existing = db.scalar(
+        select(
+            AuthorizedGroup
+        ).where(
+            AuthorizedGroup.group_jid
+            == group_jid
+        )
+    )
+
+    if existing:
+        if (
+            existing.owner_instance
+            != "tramitesextras"
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Este grupo ya pertenece "
+                    "a la instancia "
+                    f"{existing.owner_instance}."
+                ),
+            )
+
+        if custom_name:
+            existing.custom_name = (
+                custom_name
+            )
+
+        existing.category = category
+        existing.is_hidden = False
+        existing.hidden_in_main = False
+        existing.is_blocked = False
+
+    else:
+        db.add(
+            AuthorizedGroup(
+                group_jid=group_jid,
+                owner_instance=
+                    "tramitesextras",
+                custom_name=(
+                    custom_name
+                    or None
+                ),
+                category=category,
+                is_hidden=False,
+                hidden_in_main=False,
+                is_blocked=False,
+            )
+        )
+
+    db.commit()
+
+    return RedirectResponse(
+        url=(
+            "/panel"
+            f"?token={quote(token)}"
+            "&view=30d"
+        ),
+        status_code=303,
+    )
 
 
 @router.post(
