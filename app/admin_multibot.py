@@ -38,6 +38,9 @@ from app.panel_data import (
     period_bounds,
 )
 from app.models import ProductRechargeLog
+from app.queue import (
+    cfe_queue,
+)
 from app.broadcast_jobs import (
     send_instance_broadcast_job,
 )
