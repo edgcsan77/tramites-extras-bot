@@ -697,27 +697,45 @@ def main_panel_data(
         )
     )
 
+    all_groups = group_rows(
+        db,
+        cfe_rows,
+        renapo_rows,
+    )
+
+    # El resumen del panel principal solamente
+    # muestra grupos pertenecientes a la instancia
+    # principal tramitesextras.
+    main_groups = [
+        group
+        for group in all_groups
+        if str(
+            group.get(
+                "owner_instance",
+                "",
+            )
+            or ""
+        ).strip()
+        == "tramitesextras"
+    ]
+
     return {
         "summary":
             summary_from_rows(
                 cfe_rows,
                 renapo_rows,
             ),
-    
+
         "groups":
-            group_rows(
-                db,
-                cfe_rows,
-                renapo_rows,
-            ),
-    
+            main_groups,
+
         "recent":
             recent_rows(
                 db,
                 cfe_rows,
                 renapo_rows,
             ),
-    
+
         "providers":
             provider_rows(
                 cfe_rows,
