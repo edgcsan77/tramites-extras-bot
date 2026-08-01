@@ -44,3 +44,46 @@ def connect_instance(instance_name: str) -> dict:
     r = requests.get(_url(f'instance/connect/{instance_name}'), headers=_headers(), timeout=30)
     r.raise_for_status()
     return r.json() if r.content else {}
+
+
+def logout_instance(
+    instance_name: str,
+) -> dict:
+    """
+    Cierra la sesión actual de WhatsApp sin borrar
+    el registro de la instancia en Evolution.
+    """
+
+    response = requests.delete(
+        _url(
+            f"instance/logout/{instance_name}"
+        ),
+        headers=_headers(),
+        timeout=30,
+    )
+
+    # Evolution puede responder 400 cuando la sesión
+    # ya está cerrada. En ese caso se puede continuar
+    # y solicitar un QR nuevo.
+    if response.status_code in {
+        400,
+        404,
+    }:
+        return {
+            "ok": True,
+            "already_closed": True,
+            "status_code":
+                response.status_code,
+            "response":
+                response.text,
+        }
+
+    response.raise_for_status()
+
+    return (
+        response.json()
+        if response.content
+        else {
+            "ok": True,
+        }
+    )
