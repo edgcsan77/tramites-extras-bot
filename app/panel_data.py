@@ -476,13 +476,65 @@ def group_rows(
 
 
 def recent_rows(
+    db: Session,
     cfe_rows,
     renapo_rows,
     limit: int = 30,
 ):
     rows = []
 
+    group_jids = {
+        str(
+            row.client_group_jid
+            or ""
+        ).strip()
+        for row in (
+            list(cfe_rows)
+            + list(renapo_rows)
+        )
+        if str(
+            row.client_group_jid
+            or ""
+        ).strip()
+    }
+
+    configured_groups = []
+
+    if group_jids:
+        configured_groups = list(
+            db.scalars(
+                select(
+                    AuthorizedGroup
+                ).where(
+                    AuthorizedGroup.group_jid
+                    .in_(group_jids)
+                )
+            ).all()
+        )
+
+    group_names = {
+        str(
+            group.group_jid
+            or ""
+        ).strip(): (
+            str(
+                group.custom_name
+                or ""
+            ).strip()
+            or str(
+                group.group_jid
+                or ""
+            ).strip()
+        )
+        for group in configured_groups
+    }
+
     for row in cfe_rows:
+        group_jid = str(
+            row.client_group_jid
+            or ""
+        ).strip()
+
         rows.append({
             "created_at":
                 row.created_at,
@@ -500,7 +552,13 @@ def recent_rows(
                 row.status,
 
             "group_jid":
-                row.client_group_jid,
+                group_jid,
+
+            "group_name":
+                group_names.get(
+                    group_jid,
+                    group_jid,
+                ),
 
             "instance":
                 row.client_instance,
@@ -513,6 +571,11 @@ def recent_rows(
         })
 
     for row in renapo_rows:
+        group_jid = str(
+            row.client_group_jid
+            or ""
+        ).strip()
+
         rows.append({
             "created_at":
                 row.created_at,
@@ -530,7 +593,13 @@ def recent_rows(
                 row.status,
 
             "group_jid":
-                row.client_group_jid,
+                group_jid,
+
+            "group_name":
+                group_names.get(
+                    group_jid,
+                    group_jid,
+                ),
 
             "instance":
                 row.client_instance,
@@ -583,6 +652,7 @@ def main_panel_data(
 
         "recent":
             recent_rows(
+                db,
                 cfe_rows,
                 renapo_rows,
             ),
@@ -632,6 +702,7 @@ def bot_panel_data(
 
         "recent":
             recent_rows(
+                db,
                 cfe_rows,
                 renapo_rows,
                 limit=40,
