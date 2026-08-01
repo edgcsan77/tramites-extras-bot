@@ -15,7 +15,13 @@ from app.models import (
     RenapoRequest,
 )
 from app.multibot import new_panel_token, normalize_instance
-from app.services.evolution_admin import connect_instance, connection_state, create_instance, set_webhook
+from app.services.evolution_admin import (
+    connect_instance,
+    connection_state,
+    create_instance,
+    logout_instance,
+    set_webhook,
+)
 from app.panel_rfc_mini_view import render_mini_panel
 
 from app.panel_theme import (
@@ -510,49 +516,230 @@ def create_bot(display_name: str = Form(...), instance_name: str = Form(...), li
 )
 def qr(
     instance_name: str,
-    token: str = Depends(_admin),
+    token: str = Depends(
+        _admin
+    ),
 ):
-    data = connect_instance(
-        instance_name
-    )
+    try:
+        state = connection_state(
+            instance_name
+        )
+    except Exception as exc:
+        state = "unknown"
 
-    code = (
-        data.get("base64")
-        or data.get("code")
-        or (
-            data.get("qrcode", {})
-            or {}
-        ).get("base64")
-        or ""
-    )
+        print(
+            "EXTRAS_QR_STATE_FAILED",
+            {
+                "instance":
+                    instance_name,
+                "error":
+                    str(exc),
+            },
+            flush=True,
+        )
 
-    if str(code).startswith(
-        "data:image"
-    ):
-        qr_content = f"""
-        <div class="qr-box">
-          <img
-            src="{_e(code)}"
-            alt="Código QR"
-          >
+    state = str(
+        state
+        or "unknown"
+    ).strip().lower()
 
-          <p class="small">
-            Escanea el código desde
-            WhatsApp para vincular
-            la instancia.
-          </p>
-        </div>
-        """
-    else:
+    # Si ya está conectado, no cerrar una sesión sana.
+    if state == "open":
         qr_content = f"""
         <div class="empty">
-          No se recibió una imagen QR.
+          <strong>
+            Esta instancia ya está conectada.
+          </strong>
 
-          <pre class="mono">
-            {_e(data)}
-          </pre>
+          <p class="small">
+            No es necesario generar otro QR.
+          </p>
+
+          <a
+            class="btn btn-primary"
+            href="/panel/bots?token={_e(token)}"
+          >
+            Volver a bots
+          </a>
         </div>
         """
+
+    else:
+        # Si está atorada intentando conectar,
+        # cerramos el intento anterior antes
+        # de solicitar un QR nuevo.
+        if state in {
+            "connecting",
+            "close",
+            "closed",
+        }:
+            try:
+                logout_result = (
+                    logout_instance(
+                        instance_name
+                    )
+                )
+
+                print(
+                    "EXTRAS_QR_LOGOUT_OK",
+                    {
+                        "instance":
+                            instance_name,
+                        "previous_state":
+                            state,
+                        "result":
+                            logout_result,
+                    },
+                    flush=True,
+                )
+
+            except Exception as exc:
+                # No bloqueamos la generación:
+                # Evolution puede responder que
+                # ya estaba cerrada.
+                print(
+                    "EXTRAS_QR_LOGOUT_FAILED",
+                    {
+                        "instance":
+                            instance_name,
+                        "previous_state":
+                            state,
+                        "error":
+                            str(exc),
+                    },
+                    flush=True,
+                )
+
+            # Da tiempo a Evolution/Baileys
+            # de limpiar la sesión anterior.
+            time.sleep(
+                2
+            )
+
+        try:
+            data = connect_instance(
+                instance_name
+            )
+
+        except Exception as exc:
+            print(
+                "EXTRAS_QR_CONNECT_FAILED",
+                {
+                    "instance":
+                        instance_name,
+                    "error":
+                        str(exc),
+                },
+                flush=True,
+            )
+
+            raise HTTPException(
+                502,
+                (
+                    "No fue posible generar "
+                    "el QR de Evolution."
+                ),
+            ) from exc
+
+        code = (
+            data.get(
+                "base64"
+            )
+            or data.get(
+                "code"
+            )
+            or (
+                data.get(
+                    "qrcode",
+                    {},
+                )
+                or {}
+            ).get(
+                "base64"
+            )
+            or ""
+        )
+
+        if str(
+            code
+        ).startswith(
+            "data:image"
+        ):
+            qr_content = f"""
+            <div class="qr-box">
+              <img
+                src="{_e(code)}"
+                alt="Código QR"
+              >
+
+              <p class="small">
+                Escanea el código desde
+                WhatsApp para vincular
+                la instancia.
+              </p>
+
+              <p class="small">
+                Si no se escanea en 90 segundos,
+                se cerrará el intento anterior
+                y se generará otro QR.
+              </p>
+
+              <a
+                class="btn btn-info"
+                href="/panel/instance/{_e(instance_name)}/qr?token={_e(token)}"
+              >
+                Generar otro QR ahora
+              </a>
+
+              <script>
+                window.setTimeout(
+                  function () {{
+                    window.location.href =
+                      "/panel/instance/"
+                      + {instance_name!r}
+                      + "/qr?token="
+                      + {token!r};
+                  }},
+                  90000
+                );
+              </script>
+            </div>
+            """
+
+        else:
+            qr_content = f"""
+            <div class="empty">
+              <strong>
+                Evolution no devolvió una
+                imagen QR.
+              </strong>
+
+              <p class="small">
+                Estado anterior:
+                {_e(state)}
+              </p>
+
+              <pre class="mono">
+                {_e(data)}
+              </pre>
+
+              <a
+                class="btn btn-info"
+                href="/panel/instance/{_e(instance_name)}/qr?token={_e(token)}"
+              >
+                Cerrar intento y volver a generar
+              </a>
+
+              <script>
+                window.setTimeout(
+                  function () {{
+                    window.location.reload();
+                  }},
+                  15000
+                );
+              </script>
+            </div>
+            """
 
     body = f"""
     <section class="box">
