@@ -96,4 +96,32 @@ def render_mini_panel(*, panel_token, bot, view, date_from, date_to, summary, gr
     <section class="box"><div class="head"><strong>Grupos del bot</strong><span class="helper">Bloquea, renombra y administra bolsas CFE/RENAPO.</span></div><div class="table-wrap"><table><thead><tr><th>Grupo</th><th>Hoy</th><th>30 días</th><th>Mes actual</th><th>Mes anterior</th><th>Bolsas</th><th>Estado</th><th>Solicitudes</th><th>Renombrar</th><th>Acciones</th></tr></thead><tbody>{''.join(rows) or '<tr><td colspan="10">Sin grupos.</td></tr>'}</tbody></table></div></section>
     <section class="box"><div class="head"><strong>Historial de recargas</strong><span class="helper">Últimas 30 recargas aplicadas.</span></div><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Recarga</th><th>Producto</th><th>Límite anterior</th><th>Nuevo límite</th><th>Usadas</th><th>Disponibles</th><th>Origen</th></tr></thead><tbody>{''.join(recharge_rows) or '<tr><td colspan="8">Sin recargas.</td></tr>'}</tbody></table></div></section>
     <section class="box"><div class="head"><strong>Historial del periodo</strong></div><div class="table-wrap"><table><thead><tr><th>Módulo</th><th>Dato</th><th>Estado</th><th>Grupo</th><th>Fecha</th><th>Error</th></tr></thead><tbody>{recent_rows or '<tr><td colspan="6">Sin movimientos.</td></tr>'}</tbody></table></div></section>
-    </div>  <script> function confirmMiniBroadcast(form) {     const textarea = form.querySelector(         'textarea[name="message"]'     );      const message = (         textarea?.value         || ""     ).trim();      if (!message) {         alert(             "Escribe un mensaje antes de enviarlo."         );          return false;     }      return window.confirm(         "¿Enviar este mensaje a todos los grupos activos de este bot?"     ); } </script>  </body> </html>'''
+    </div>
+
+    <script>
+    function confirmMiniBroadcast(form) {{
+        const textarea = form.querySelector(
+            'textarea[name="message"]'
+        );
+    
+        const message = (
+            textarea?.value
+            || ""
+        ).trim();
+    
+        if (!message) {{
+            alert(
+                "Escribe un mensaje antes de enviarlo."
+            );
+    
+            return false;
+        }}
+    
+        return window.confirm(
+            "¿Enviar este mensaje a todos los grupos activos de este bot?"
+        );
+    }}
+    </script>
+    
+    </body>
+    </html>'''
