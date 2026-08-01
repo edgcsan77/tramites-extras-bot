@@ -196,7 +196,7 @@ def panel_home(
     view: str = "day",
     date_from: str = "",
     date_to: str = "",
-    group_view: str = "all",
+    group_view: str = "activity",
     db: Session = Depends(get_db),
 ):
     time_min, time_max, view = period_bounds(
@@ -213,14 +213,14 @@ def panel_home(
     
     group_view = str(
         group_view
-        or "all"
+        or "activity"
     ).strip().lower()
 
     if group_view not in {
         "all",
         "activity",
     }:
-        group_view = "all"
+        group_view = "activity"
 
     all_groups = list(
         data.get(
