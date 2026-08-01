@@ -350,4 +350,43 @@ def render_main_panel(
 <section class="box"><div class="head"><strong>Resumen por grupo cliente</strong><span class="small">{len(groups)} grupos</span></div><div class="table-wrap"><table><thead><tr><th>Grupo</th><th>Total</th><th>Entregadas</th><th>CFE</th><th>RENAPO</th><th>Bolsa CFE</th><th>Bolsa RENAPO</th><th>Estado</th><th>Actualización</th><th>Acciones</th></tr></thead><tbody>{''.join(group_rows) or '<tr><td colspan="10">Sin grupos.</td></tr>'}</tbody></table></div></section>
 <section class="box"><div class="head"><strong>Solicitudes recientes</strong></div><div class="table-wrap"><table><thead><tr><th>Módulo</th><th>ID</th><th>Dato</th><th>Estado</th><th>Grupo</th><th>Instancia</th><th>Creado</th><th>Error</th></tr></thead><tbody>{''.join(recent_rows) or '<tr><td colspan="8">Sin solicitudes.</td></tr>'}</tbody></table></div></section>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><section class="box"><div class="head"><strong>Colas RQ</strong></div><div class="table-wrap"><table style="min-width:600px"><thead><tr><th>Cola</th><th>En cola</th><th>Activos</th><th>Fallidos</th><th>Finalizados</th></tr></thead><tbody>{qrows}</tbody></table></div></section><section class="box"><div class="head"><strong>Instancias Evolution</strong></div><div class="table-wrap"><table style="min-width:500px"><thead><tr><th>Instancia</th><th>Estado</th><th>Rol</th></tr></thead><tbody>{erows}</tbody></table></div></section></div>
-</div>  <script> function setMainBroadcastMessage(message) {     const textarea = document.getElementById(         "mainBroadcastText"     );      if (!textarea) {         return;     }      textarea.value = message;     textarea.focus(); }  function confirmMainBroadcast(form) {     const textarea = form.querySelector(         'textarea[name="message"]'     );      const message = (         textarea?.value         || ""     ).trim();      if (!message) {         alert(             "Escribe un mensaje antes de enviarlo."         );          return false;     }      return window.confirm(         "¿Enviar este mensaje a todos los grupos activos de tramitesextras?"     ); } </script>  </body> </html>'''
+</div>
+<script>
+function setMainBroadcastMessage(message) {{
+    const textarea = document.getElementById(
+        "mainBroadcastText"
+    );
+
+    if (!textarea) {{
+        return;
+    }}
+
+    textarea.value = message;
+    textarea.focus();
+}}
+
+function confirmMainBroadcast(form) {{
+    const textarea = form.querySelector(
+        'textarea[name="message"]'
+    );
+
+    const message = (
+        textarea?.value
+        || ""
+    ).trim();
+
+    if (!message) {{
+        alert(
+            "Escribe un mensaje antes de enviarlo."
+        );
+
+        return false;
+    }}
+
+    return window.confirm(
+        "¿Enviar este mensaje a todos los grupos activos de tramitesextras?"
+    );
+}}
+</script>
+</body>
+</html>'''
