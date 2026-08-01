@@ -4,7 +4,11 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from app.config import settings
 from app.db import SessionLocal
-from app.models import BotControl, CfeRequest
+from app.models import (
+    AuthorizedGroup,
+    BotControl,
+    CfeRequest,
+)
 from app.multibot import claim_or_validate_group, client_instance_allowed, enabled_cfe_providers, provider_by_group
 from app.modules.cfe.flow import associate_provider_message, claim_delivery, finish, load_pending, request_key, resolve_by_provider_message, save_pending
 from app.modules.cfe.parser import (
@@ -25,6 +29,11 @@ def _increment_usage(
     db,
     row: CfeRequest,
 ) -> None:
+    """
+    Registra una sola vez el consumo CFE tanto
+    en el bot propietario como en el grupo cliente.
+    """
+
     if row.usage_counted:
         return
 
@@ -37,16 +46,32 @@ def _increment_usage(
         ).with_for_update()
     )
 
+    group = db.scalar(
+        select(
+            AuthorizedGroup
+        ).where(
+            AuthorizedGroup.group_jid
+            == row.client_group_jid
+        ).with_for_update()
+    )
+
     if bot:
-        # Compatibilidad con el contador antiguo.
+        # Contador antiguo conservado por compatibilidad.
         bot.used_total = (
             int(bot.used_total or 0)
             + 1
         )
 
-        # Contador real mostrado en el mini panel.
+        # Contador CFE real del bot.
         bot.cfe_used = (
             int(bot.cfe_used or 0)
+            + 1
+        )
+
+    if group:
+        # Contador CFE real del grupo.
+        group.cfe_used = (
+            int(group.cfe_used or 0)
             + 1
         )
 
