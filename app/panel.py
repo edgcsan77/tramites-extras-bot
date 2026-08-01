@@ -199,7 +199,18 @@ def panel_home(
     group_view: str = "all",
     db: Session = Depends(get_db),
 ):
-    time_min, time_max, view = period_bounds(view, date_from, date_to)
+    time_min, time_max, view = period_bounds(
+        view,
+        date_from,
+        date_to,
+    )
+    
+    data = main_panel_data(
+        db,
+        time_min,
+        time_max,
+    )
+    
     group_view = str(
         group_view
         or "all"
@@ -237,12 +248,33 @@ def panel_home(
         )
     providers = list(db.scalars(select(ProviderSetting).order_by(ProviderSetting.priority, ProviderSetting.id)).all())
     instance_name = getattr(settings, "TRANSPORT_INSTANCE", None) or getattr(settings, "EVOLUTION_INSTANCE", None) or "tramitesextras"
-    return HTMLResponse(render_main_panel(
-        token=token, view=view, date_from=date_from, date_to=date_to,
-        summary=data["summary"], groups=visible_groups, group_view=group_view, recent=data["recent"],
-        providers=providers, provider_stats=data["providers"], queue_rows=[_queue_info(cfe_queue), _queue_info(renapo_queue)],
-        evolution_rows=[{"instance_name": instance_name, "state": _evolution_state(instance_name), "role": "Transporte a proveedores"}],
-    ))
+    return HTMLResponse(
+        render_main_panel(
+            token=token,
+            view=view,
+            date_from=date_from,
+            date_to=date_to,
+            group_view=group_view,
+            summary=data["summary"],
+            groups=visible_groups,
+            recent=data["recent"],
+            providers=providers,
+            provider_stats=data["providers"],
+            queue_rows=[
+                _queue_info(cfe_queue),
+                _queue_info(renapo_queue),
+            ],
+            evolution_rows=[
+                {
+                    "instance_name": instance_name,
+                    "state": _evolution_state(
+                        instance_name
+                    ),
+                    "role": "Transporte a proveedores",
+                }
+            ],
+        )
+    )
 
 
 @router.post(
