@@ -41,6 +41,10 @@ from sqlalchemy import (
 
 from sqlalchemy.orm import Session
 
+from app.broadcast_jobs import (
+    send_instance_broadcast_job,
+)
+
 from app.config import settings
 from app.db import get_db
 
@@ -316,6 +320,83 @@ def add_group_from_main_panel(
             "/panel"
             f"?token={quote(token)}"
             "&view=30d"
+        ),
+        status_code=303,
+    )
+
+
+@router.post(
+    "/panel/broadcast"
+)
+def main_panel_broadcast(
+    message: str = Form(...),
+    token: str = Depends(
+        require_panel_token
+    ),
+):
+    """
+    Encola un mensaje masivo para los grupos
+    pertenecientes a tramitesextras.
+    """
+
+    message = str(
+        message
+        or ""
+    ).strip()
+
+    if not message:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Escribe el mensaje "
+                "que deseas enviar."
+            ),
+        )
+
+    if len(message) > 3500:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "El mensaje no puede superar "
+                "3500 caracteres."
+            ),
+        )
+
+    job = cfe_queue.enqueue(
+        send_instance_broadcast_job,
+        kwargs={
+            "instance_name":
+                "tramitesextras",
+
+            "message":
+                message,
+        },
+        job_timeout=900,
+        result_ttl=86400,
+        failure_ttl=86400,
+    )
+
+    print(
+        "EXTRAS_MAIN_BROADCAST_ENQUEUED",
+        {
+            "job_id":
+                job.id,
+
+            "instance":
+                "tramitesextras",
+
+            "message_length":
+                len(message),
+        },
+        flush=True,
+    )
+
+    return RedirectResponse(
+        url=(
+            "/panel"
+            f"?token={quote(token)}"
+            "&view=day"
+            "&broadcast=queued"
         ),
         status_code=303,
     )
