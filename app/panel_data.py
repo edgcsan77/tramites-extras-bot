@@ -479,7 +479,7 @@ def recent_rows(
     db: Session,
     cfe_rows,
     renapo_rows,
-    limit: int = 30,
+    limit: int = 10,
 ):
     rows = []
 
@@ -705,6 +705,6 @@ def bot_panel_data(
                 db,
                 cfe_rows,
                 renapo_rows,
-                limit=40,
+                limit=10,
             ),
     }
