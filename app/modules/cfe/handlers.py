@@ -19,6 +19,7 @@ from app.modules.cfe.parser import (
     extract_service_numbers_from_status_text,
     text_is_deregistered,
     text_is_no_record,
+    text_is_processing_error,
 )
 from app.queue import redis_conn
 from app.services.evolution import extract_sent_message_id, get_media_base64, send_pdf_base64, send_text
@@ -129,6 +130,7 @@ def _complete_text_provider_result(
     response_message_id: str,
     status: str,
     client_message: str,
+    error_message: str = "",
 ) -> dict:
     """
     Entrega al cliente un resultado textual
@@ -180,6 +182,11 @@ def _complete_text_provider_result(
             row.provider_response_message_id = (
                 response_message_id
             )
+
+            if error_message:
+                row.error_message = (
+                    error_message
+                )
 
             row.completed_at = datetime.now(
                 timezone.utc
@@ -939,6 +946,14 @@ def process_provider(
         )
     )
 
+    is_processing_error = (
+        not is_deregistered
+        and not is_no_record
+        and text_is_processing_error(
+            text
+        )
+    )
+
     # ==================================================
     # 1. Intentar resolver mediante respuesta citada
     # ==================================================
@@ -968,6 +983,7 @@ def process_provider(
         and (
             is_deregistered
             or is_no_record
+            or is_processing_error
         )
     ):
         (
@@ -1222,9 +1238,122 @@ def process_provider(
             "total":
                 len(completed),
         }
+
+    # ==================================================
+    # 4. Error final de procesamiento del proveedor
+    # ==================================================
+
+    if is_processing_error:
+        # Caso citado: una sola solicitud.
+        if quoted_id:
+            if not key:
+                return {
+                    "ok": True,
+                    "ignored":
+                        "processing_error_request_not_found",
+                }
+
+            if not pending:
+                return {
+                    "ok": True,
+                    "ignored":
+                        "pending_expired",
+                }
+
+            service_number = pending[
+                "service_number"
+            ]
+
+            return _complete_text_provider_result(
+                key=key,
+                pending=pending,
+                response_message_id=
+                    response_message_id,
+
+                status="ERROR",
+
+                client_message=(
+                    f"⚠️ "
+                    f"{pending['requester_name']}, "
+                    "tuvimos un problema procesando "
+                    "tu solicitud para el servicio "
+                    f"{service_number}. "
+                    "Verifica que sea correcto "
+                    "o intenta más tarde."
+                ),
+
+                error_message=(
+                    "El proveedor no pudo procesar "
+                    "la solicitud CFE."
+                ),
+            )
+
+        # Caso no citado: admite uno o varios servicios.
+        if not status_requests:
+            return {
+                "ok": True,
+                "ignored":
+                    "processing_error_requests_not_found",
+            }
+
+        completed: list[str] = []
+
+        for (
+            status_key,
+            status_pending,
+        ) in status_requests:
+            service_number = (
+                status_pending[
+                    "service_number"
+                ]
+            )
+
+            result = (
+                _complete_text_provider_result(
+                    key=status_key,
+                    pending=status_pending,
+                    response_message_id=(
+                        f"{response_message_id}:"
+                        f"{service_number}"
+                    ),
+                    status="ERROR",
+                    client_message=(
+                        f"⚠️ "
+                        f"{status_pending['requester_name']}, "
+                        "tuvimos un problema procesando "
+                        "tu solicitud para el servicio "
+                        f"{service_number}. "
+                        "Verifica que sea correcto "
+                        "o intenta más tarde."
+                    ),
+                    error_message=(
+                        "El proveedor no pudo procesar "
+                        "la solicitud CFE."
+                    ),
+                )
+            )
+
+            if result.get(
+                "status"
+            ) == "ERROR":
+                completed.append(
+                    service_number
+                )
+
+        return {
+            "ok": True,
+            "status":
+                "PROCESSING_ERROR_BATCH",
+
+            "completed":
+                completed,
+
+            "total":
+                len(completed),
+        }
         
     # ==================================================
-    # 4. La respuesta debe contener un documento PDF
+    # 5. La respuesta debe contener un documento PDF
     # ==================================================
 
     doc = get_document(payload)
@@ -1239,7 +1368,7 @@ def process_provider(
         }
 
     # ==================================================
-    # 5. Descargar el PDF recibido
+    # 6. Descargar el PDF recibido
     # ==================================================
 
     media = get_media_base64(
@@ -1278,7 +1407,7 @@ def process_provider(
         )
 
     # ==================================================
-    # 6. Si no venía citado, leer el número del PDF
+    # 7. Si no venía citado, leer el número del PDF
     # ==================================================
 
     pdf_service_number = ""
@@ -1349,7 +1478,7 @@ def process_provider(
             }
 
     # ==================================================
-    # 7. Validar que el PDF corresponda a la solicitud
+    # 8. Validar que el PDF corresponda a la solicitud
     # ==================================================
 
     if not pdf_service_number:
@@ -1400,7 +1529,7 @@ def process_provider(
             }
 
     # ==================================================
-    # 8. Reclamar y entregar una sola vez
+    # 9. Reclamar y entregar una sola vez
     # ==================================================
 
     if not claim_delivery(key):
