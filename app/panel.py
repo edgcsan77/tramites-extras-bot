@@ -190,19 +190,56 @@ def root(token: str = ""):
     response_class=HTMLResponse,
 )
 def panel_home(
-    token: str = Depends(require_panel_token),
+    token: str = Depends(
+        require_panel_token
+    ),
     view: str = "day",
     date_from: str = "",
     date_to: str = "",
+    group_view: str = "all",
     db: Session = Depends(get_db),
 ):
     time_min, time_max, view = period_bounds(view, date_from, date_to)
-    data = main_panel_data(db, time_min, time_max)
+    group_view = str(
+        group_view
+        or "all"
+    ).strip().lower()
+
+    if group_view not in {
+        "all",
+        "activity",
+    }:
+        group_view = "all"
+
+    all_groups = list(
+        data.get(
+            "groups",
+            [],
+        )
+    )
+
+    if group_view == "activity":
+        visible_groups = [
+            group
+            for group in all_groups
+            if int(
+                group.get(
+                    "total",
+                    0,
+                )
+                or 0
+            ) > 0
+        ]
+
+    else:
+        visible_groups = (
+            all_groups
+        )
     providers = list(db.scalars(select(ProviderSetting).order_by(ProviderSetting.priority, ProviderSetting.id)).all())
     instance_name = getattr(settings, "TRANSPORT_INSTANCE", None) or getattr(settings, "EVOLUTION_INSTANCE", None) or "tramitesextras"
     return HTMLResponse(render_main_panel(
         token=token, view=view, date_from=date_from, date_to=date_to,
-        summary=data["summary"], groups=data["groups"], recent=data["recent"],
+        summary=data["summary"], groups=visible_groups, group_view=group_view, recent=data["recent"],
         providers=providers, provider_stats=data["providers"], queue_rows=[_queue_info(cfe_queue), _queue_info(renapo_queue)],
         evolution_rows=[{"instance_name": instance_name, "state": _evolution_state(instance_name), "role": "Transporte a proveedores"}],
     ))
