@@ -40,8 +40,19 @@ def render_main_panel(*, token, view, date_from, date_to, summary, groups, recen
         status = (r.get("status") or "").upper()
         cls = "badge-success" if status == "DONE" else "badge-danger" if status == "ERROR" else "badge-warning"
         recent_rows.append(
-            f'<tr><td>{_e(r.get("module"))}</td><td>{_e(r.get("id"))}</td><td class="mono">{_e(r.get("identifier"))}</td>'
-            f'<td><span class="badge {cls}">{_e(status)}</span></td><td class="mono">{_e(r.get("group_jid"))}</td><td>{_e(r.get("instance"))}</td><td>{_e(r.get("created_at"))}</td><td class="small">{_e(r.get("error"))}</td></tr>'
+            f'<tr>'
+            f'<td>{_e(r.get("module"))}</td>'
+            f'<td>{_e(r.get("id"))}</td>'
+            f'<td class="mono">{_e(r.get("identifier"))}</td>'
+            f'<td><span class="badge {cls}">{_e(status)}</span></td>'
+            f'<td>'
+            f'<strong>{_e(r.get("group_name") or r.get("group_jid"))}</strong>'
+            f'<div class="small mono">{_e(r.get("group_jid"))}</div>'
+            f'</td>'
+            f'<td>{_e(r.get("instance"))}</td>'
+            f'<td>{_e(r.get("created_at"))}</td>'
+            f'<td class="small">{_e(r.get("error"))}</td>'
+            f'</tr>'
         )
 
     qrows = ''.join(f'<tr><td>{_e(q.get("name"))}</td><td>{_e(q.get("queued","-"))}</td><td>{_e(q.get("started","-"))}</td><td>{_e(q.get("failed","-"))}</td><td>{_e(q.get("finished","-"))}</td></tr>' for q in queue_rows)
