@@ -5,16 +5,164 @@ def _e(value):
     return html.escape(str(value if value is not None else ""), quote=True)
 
 
-def render_main_panel(*, token, view, date_from, date_to, summary, groups, recent, providers, queue_rows, evolution_rows):
+def render_main_panel(
+    *,
+    token,
+    view,
+    date_from,
+    date_to,
+    summary,
+    groups,
+    recent,
+    providers,
+    provider_stats,
+    queue_rows,
+    evolution_rows,
+):
     provider_cards = []
+
     for p in providers:
-        active = bool(getattr(p, "is_enabled", False))
+        active = bool(
+            getattr(
+                p,
+                "is_enabled",
+                False,
+            )
+        )
+
+        provider_name = str(
+            getattr(
+                p,
+                "provider_name",
+                "",
+            )
+            or ""
+        ).strip()
+
+        stats = (
+            provider_stats.get(
+                provider_name,
+                {},
+            )
+        )
+
+        total = int(
+            stats.get(
+                "total",
+                0,
+            )
+            or 0
+        )
+
+        done = int(
+            stats.get(
+                "done",
+                0,
+            )
+            or 0
+        )
+
+        pending = int(
+            stats.get(
+                "pending",
+                0,
+            )
+            or 0
+        )
+
+        errors = int(
+            stats.get(
+                "errors",
+                0,
+            )
+            or 0
+        )
+
+        no_record = int(
+            stats.get(
+                "no_record",
+                0,
+            )
+            or 0
+        )
+
+        deregistered = int(
+            stats.get(
+                "deregistered",
+                0,
+            )
+            or 0
+        )
+
         provider_cards.append(
-            f'<div class="provider-card"><div class="provider-name">{_e(getattr(p,"display_name","Proveedor"))}</div>'
-            f'<div class="helper">Código: {_e(getattr(p,"provider_name",""))}</div>'
-            f'<div class="helper">Prioridad: {_e(getattr(p,"priority",""))}</div>'
-            f'<div class="status-panel"><strong style="color:{"#86efac" if active else "#fca5a5"}">{"ACTIVO" if active else "INACTIVO"}</strong></div>'
-            f'<form method="post" action="/panel/providers/{getattr(p,"id","")}/toggle?token={_e(token)}"><button class="btn {"btn-danger" if active else "btn-success"}">{"Desactivar" if active else "Activar"}</button></form></div>'
+            f'<div class="provider-card">'
+
+            f'<div class="provider-name">'
+            f'{_e(getattr(p, "display_name", "Proveedor"))}'
+            f'</div>'
+
+            f'<div class="helper">'
+            f'Código: {_e(provider_name)}'
+            f'</div>'
+
+            f'<div class="helper">'
+            f'Prioridad: {_e(getattr(p, "priority", ""))}'
+            f'</div>'
+
+            f'<div class="provider-count-grid">'
+
+            f'<div class="provider-count-box">'
+            f'<span>Solicitudes</span>'
+            f'<strong>{total}</strong>'
+            f'</div>'
+
+            f'<div class="provider-count-box">'
+            f'<span>Entregadas</span>'
+            f'<strong>{done}</strong>'
+            f'</div>'
+
+            f'<div class="provider-count-box">'
+            f'<span>Pendientes</span>'
+            f'<strong>{pending}</strong>'
+            f'</div>'
+
+            f'<div class="provider-count-box">'
+            f'<span>Errores</span>'
+            f'<strong>{errors}</strong>'
+            f'</div>'
+
+            f'</div>'
+
+            f'<div class="helper provider-secondary-counts">'
+            f'Sin recibo: {no_record}'
+            f' · Dados de baja: {deregistered}'
+            f'</div>'
+
+            f'<div class="status-panel">'
+
+            f'<strong style="color:'
+            f'{"#86efac" if active else "#fca5a5"}'
+            f'">'
+
+            f'{"ACTIVO" if active else "INACTIVO"}'
+
+            f'</strong>'
+            f'</div>'
+
+            f'<form method="post" '
+            f'action="/panel/providers/'
+            f'{getattr(p, "id", "")}'
+            f'/toggle?token={_e(token)}">'
+
+            f'<button class="btn '
+            f'{"btn-danger" if active else "btn-success"}">'
+
+            f'{"Desactivar" if active else "Activar"}'
+
+            f'</button>'
+            f'</form>'
+
+            f'</div>'
         )
     if not provider_cards:
         provider_cards.append('<div class="provider-card"><div class="provider-name">Sin proveedores</div><div class="helper">Agrega proveedores CFE desde el panel de proveedores.</div></div>')
@@ -59,7 +207,7 @@ def render_main_panel(*, token, view, date_from, date_to, summary, groups, recen
     erows = ''.join(f'<tr><td>{_e(x.get("instance_name"))}</td><td><span class="badge {"badge-success" if x.get("state") == "open" else "badge-danger"}">{_e(x.get("state","unknown")).upper()}</span></td><td>{_e(x.get("role"))}</td></tr>' for x in evolution_rows)
 
     css = r'''
-:root{--bg:#f4f6f8;--card:#fff;--text:#1f2937;--muted:#6b7280;--line:#e5e7eb;--primary:#334155;--primary-dark:#1e293b;--success:#166534;--warning:#a16207;--danger:#991b1b;--shadow:0 8px 24px rgba(15,23,42,.07);--radius:18px}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--text)}.wrap{max-width:1500px;margin:auto;padding:16px}.hero{background:linear-gradient(135deg,#1f2937 0%,#334155 55%,#475569 100%);color:#fff;border-radius:24px;padding:22px;margin-bottom:18px;box-shadow:var(--shadow)}.hero-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}.hero h1{margin:0 0 8px;font-size:1.9rem}.hero-sub{color:rgba(255,255,255,.88)}.toolbar{margin-top:16px;display:flex;gap:10px;flex-wrap:wrap}.tool-link{text-decoration:none;padding:10px 16px;border-radius:12px;background:rgba(255,255,255,.10);color:#fff;font-weight:700;border:1px solid rgba(255,255,255,.14)}.tool-link-active{background:#fff;color:var(--primary-dark);border-color:#fff}.grid-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:16px;margin-top:18px;align-items:stretch}.glass{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.10);border-radius:20px;padding:18px;backdrop-filter:blur(8px)}.section-title{margin:0 0 14px;font-size:1rem;font-weight:800}.provider-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.provider-card{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:14px}.provider-name{font-weight:800;margin-bottom:10px}.helper{color:rgba(255,255,255,.82);font-size:.86rem;line-height:1.45}.status-panel{margin:14px 0;padding:12px;border-radius:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.10)}.broadcast-header{display:flex;justify-content:space-between;gap:16px;align-items:end;flex-wrap:wrap}.broadcast-select,.textarea{width:100%;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.08);color:#fff;border-radius:12px;padding:11px 12px;font:inherit}.broadcast-select option{color:#111827;background:#fff}.broadcast-buttons{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:16px}.textarea{background:#fff;color:#111827;min-height:130px;margin-top:12px}.box{background:#fff;border-radius:18px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:16px;border:1px solid #eef2f7}.head{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;background:#fafbfc}.filters{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;padding:16px}.filters input,.filters select{width:100%;padding:11px 12px;border:1px solid #d1d5db;border-radius:12px;font:inherit;background:#fff}.cards{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:16px}.card{background:#fff;border-radius:18px;padding:16px;box-shadow:var(--shadow);border:1px solid var(--line);position:relative}.card::before{content:"";position:absolute;top:0;left:0;right:0;height:4px;border-radius:18px 18px 0 0;background:#cbd5e1}.label{color:var(--muted);font-size:.88rem;margin-bottom:8px;font-weight:700;text-transform:uppercase}.value{font-size:1.9rem;font-weight:800}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;min-width:1100px}th,td{padding:12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{background:#1f2937;color:#fff;position:sticky;top:0}.small{color:var(--muted);font-size:.84rem}.mono{font-family:Consolas,monospace}.actions-row{display:flex;flex-wrap:wrap;gap:8px}.btn{border:0;border-radius:12px;padding:10px 14px;font-weight:800;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}.btn-primary{background:var(--primary);color:#fff}.btn-success{background:var(--success);color:#fff}.btn-danger{background:var(--danger);color:#fff}.btn-warning{background:var(--warning);color:#fff}.badge{display:inline-flex;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700}.badge-success{background:#dcfce7;color:#166534}.badge-warning{background:#fff7ed;color:#c2410c}.badge-danger{background:#fef2f2;color:#b91c1c}@media(max-width:1100px){.grid-hero{grid-template-columns:1fr}.provider-grid{grid-template-columns:repeat(2,1fr)}.cards{grid-template-columns:repeat(2,1fr)}.filters{grid-template-columns:repeat(2,1fr)}}@media(max-width:640px){.provider-grid,.cards,.filters,.broadcast-buttons{grid-template-columns:1fr}}
+:root{--bg:#f4f6f8;--card:#fff;--text:#1f2937;--muted:#6b7280;--line:#e5e7eb;--primary:#334155;--primary-dark:#1e293b;--success:#166534;--warning:#a16207;--danger:#991b1b;--shadow:0 8px 24px rgba(15,23,42,.07);--radius:18px}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--text)}.wrap{max-width:1500px;margin:auto;padding:16px}.hero{background:linear-gradient(135deg,#1f2937 0%,#334155 55%,#475569 100%);color:#fff;border-radius:24px;padding:22px;margin-bottom:18px;box-shadow:var(--shadow)}.hero-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}.hero h1{margin:0 0 8px;font-size:1.9rem}.hero-sub{color:rgba(255,255,255,.88)}.toolbar{margin-top:16px;display:flex;gap:10px;flex-wrap:wrap}.tool-link{text-decoration:none;padding:10px 16px;border-radius:12px;background:rgba(255,255,255,.10);color:#fff;font-weight:700;border:1px solid rgba(255,255,255,.14)}.tool-link-active{background:#fff;color:var(--primary-dark);border-color:#fff}.grid-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:16px;margin-top:18px;align-items:stretch}.glass{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.10);border-radius:20px;padding:18px;backdrop-filter:blur(8px)}.section-title{margin:0 0 14px;font-size:1rem;font-weight:800}.provider-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.provider-card{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:14px}.provider-name{font-weight:800;margin-bottom:10px}.provider-count-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:14px}.provider-count-box{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:10px}.provider-count-box span{display:block;color:rgba(255,255,255,.76);font-size:.72rem;margin-bottom:5px}.provider-count-box strong{display:block;color:#fff;font-size:1.25rem}.provider-secondary-counts{margin-top:10px}.helper{color:rgba(255,255,255,.82);font-size:.86rem;line-height:1.45}.status-panel{margin:14px 0;padding:12px;border-radius:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.10)}.broadcast-header{display:flex;justify-content:space-between;gap:16px;align-items:end;flex-wrap:wrap}.broadcast-select,.textarea{width:100%;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.08);color:#fff;border-radius:12px;padding:11px 12px;font:inherit}.broadcast-select option{color:#111827;background:#fff}.broadcast-buttons{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:16px}.textarea{background:#fff;color:#111827;min-height:130px;margin-top:12px}.box{background:#fff;border-radius:18px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:16px;border:1px solid #eef2f7}.head{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;background:#fafbfc}.filters{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;padding:16px}.filters input,.filters select{width:100%;padding:11px 12px;border:1px solid #d1d5db;border-radius:12px;font:inherit;background:#fff}.cards{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:16px}.card{background:#fff;border-radius:18px;padding:16px;box-shadow:var(--shadow);border:1px solid var(--line);position:relative}.card::before{content:"";position:absolute;top:0;left:0;right:0;height:4px;border-radius:18px 18px 0 0;background:#cbd5e1}.label{color:var(--muted);font-size:.88rem;margin-bottom:8px;font-weight:700;text-transform:uppercase}.value{font-size:1.9rem;font-weight:800}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;min-width:1100px}th,td{padding:12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{background:#1f2937;color:#fff;position:sticky;top:0}.small{color:var(--muted);font-size:.84rem}.mono{font-family:Consolas,monospace}.actions-row{display:flex;flex-wrap:wrap;gap:8px}.btn{border:0;border-radius:12px;padding:10px 14px;font-weight:800;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}.btn-primary{background:var(--primary);color:#fff}.btn-success{background:var(--success);color:#fff}.btn-danger{background:var(--danger);color:#fff}.btn-warning{background:var(--warning);color:#fff}.badge{display:inline-flex;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700}.badge-success{background:#dcfce7;color:#166534}.badge-warning{background:#fff7ed;color:#c2410c}.badge-danger{background:#fef2f2;color:#b91c1c}@media(max-width:1100px){.grid-hero{grid-template-columns:1fr}.provider-grid{grid-template-columns:repeat(2,1fr)}.cards{grid-template-columns:repeat(2,1fr)}.filters{grid-template-columns:repeat(2,1fr)}}@media(max-width:640px){.provider-grid,.cards,.filters,.broadcast-buttons{grid-template-columns:1fr}}
 '''
     selected_day = (
         "selected"
