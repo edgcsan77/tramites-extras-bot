@@ -12,7 +12,6 @@ def render_main_panel(*, token, view, date_from, date_to, summary, groups, recen
         provider_cards.append(
             f'<div class="provider-card"><div class="provider-name">{_e(getattr(p,"display_name","Proveedor"))}</div>'
             f'<div class="helper">Código: {_e(getattr(p,"provider_name",""))}</div>'
-            f'<div class="helper">Grupo: {_e(getattr(p,"group_jid",""))}</div>'
             f'<div class="helper">Prioridad: {_e(getattr(p,"priority",""))}</div>'
             f'<div class="status-panel"><strong style="color:{"#86efac" if active else "#fca5a5"}">{"ACTIVO" if active else "INACTIVO"}</strong></div>'
             f'<form method="post" action="/panel/providers/{getattr(p,"id","")}/toggle?token={_e(token)}"><button class="btn {"btn-danger" if active else "btn-success"}">{"Desactivar" if active else "Activar"}</button></form></div>'
