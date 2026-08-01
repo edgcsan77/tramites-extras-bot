@@ -258,7 +258,7 @@ def render_main_panel(
 
     active_group_view = str(
         group_view
-        or "all"
+        or "activity"
     ).strip().lower()
 
     def group_view_class(
