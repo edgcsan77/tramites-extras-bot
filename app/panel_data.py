@@ -623,6 +623,67 @@ def recent_rows(
     return rows[:limit]
 
 
+def provider_rows(
+    cfe_rows,
+):
+    """
+    Agrupa las solicitudes CFE por proveedor
+    dentro del periodo seleccionado.
+    """
+
+    result = defaultdict(
+        lambda: {
+            "total": 0,
+            "done": 0,
+            "pending": 0,
+            "errors": 0,
+            "no_record": 0,
+            "deregistered": 0,
+        }
+    )
+
+    for row in cfe_rows:
+        provider_name = str(
+            row.provider_name
+            or ""
+        ).strip()
+
+        if not provider_name:
+            provider_name = (
+                "sin_proveedor"
+            )
+
+        stats = result[
+            provider_name
+        ]
+
+        stats["total"] += 1
+
+        status = str(
+            row.status
+            or ""
+        ).strip().upper()
+
+        if status == "DONE":
+            stats["done"] += 1
+
+        elif status in PENDING_STATUSES:
+            stats["pending"] += 1
+
+        elif status == "ERROR":
+            stats["errors"] += 1
+
+        elif status == "NO_RECORD":
+            stats["no_record"] += 1
+
+        elif status == "DEREGISTERED":
+            stats["deregistered"] += 1
+
+    return dict(
+        result
+    )
+
+
 def main_panel_data(
     db: Session,
     time_min,
@@ -642,19 +703,24 @@ def main_panel_data(
                 cfe_rows,
                 renapo_rows,
             ),
-
+    
         "groups":
             group_rows(
                 db,
                 cfe_rows,
                 renapo_rows,
             ),
-
+    
         "recent":
             recent_rows(
                 db,
                 cfe_rows,
                 renapo_rows,
+            ),
+    
+        "providers":
+            provider_rows(
+                cfe_rows,
             ),
     }
 
