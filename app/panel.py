@@ -389,6 +389,7 @@ def add_group_from_main_panel(
             "/panel"
             f"?token={quote(token)}"
             "&view=30d"
+            "&group_view=activity"
         ),
         status_code=303,
     )
@@ -465,6 +466,7 @@ def main_panel_broadcast(
             "/panel"
             f"?token={quote(token)}"
             "&view=day"
+            "&group_view=activity"
             "&broadcast=queued"
         ),
         status_code=303,
