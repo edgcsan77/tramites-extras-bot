@@ -21,12 +21,35 @@ from app.services.evolution import extract_sent_message_id, get_media_base64, se
 from app.webhook_utils import get_document, get_from_me, get_instance, get_message_id, get_participant, get_push_name, get_quoted_message_id, get_remote_jid, get_text
 
 
-def _increment_usage(db, row: CfeRequest) -> None:
+def _increment_usage(
+    db,
+    row: CfeRequest,
+) -> None:
     if row.usage_counted:
         return
-    bot = db.scalar(select(BotControl).where(BotControl.instance_name == row.client_instance).with_for_update())
+
+    bot = db.scalar(
+        select(
+            BotControl
+        ).where(
+            BotControl.instance_name
+            == row.client_instance
+        ).with_for_update()
+    )
+
     if bot:
-        bot.used_total += 1
+        # Compatibilidad con el contador antiguo.
+        bot.used_total = (
+            int(bot.used_total or 0)
+            + 1
+        )
+
+        # Contador real mostrado en el mini panel.
+        bot.cfe_used = (
+            int(bot.cfe_used or 0)
+            + 1
+        )
+
     row.usage_counted = True
 
 
