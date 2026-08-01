@@ -980,8 +980,8 @@ def providers_panel(
 
     return HTMLResponse(
         page_html(
-            title="Proveedores CFE",
-            hero_title="Proveedores CFE",
+            title="Proveedores",
+            hero_title="Proveedores",
             hero_subtitle=(
                 "Control de grupos proveedores "
                 "y prioridades de atención."
