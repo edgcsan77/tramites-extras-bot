@@ -197,7 +197,7 @@ def panel_home(
     return HTMLResponse(render_main_panel(
         token=token, view=view, date_from=date_from, date_to=date_to,
         summary=data["summary"], groups=data["groups"], recent=data["recent"],
-        providers=providers, queue_rows=[_queue_info(cfe_queue), _queue_info(renapo_queue)],
+        providers=providers, provider_stats=data["providers"], queue_rows=[_queue_info(cfe_queue), _queue_info(renapo_queue)],
         evolution_rows=[{"instance_name": instance_name, "state": _evolution_state(instance_name), "role": "Transporte a proveedores"}],
     ))
 
