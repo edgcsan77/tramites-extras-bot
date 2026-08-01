@@ -187,6 +187,44 @@ def text_is_deregistered(
     )
 
 
+def text_is_processing_error(
+    text: str,
+) -> bool:
+    """
+    Detecta respuestas finales del proveedor
+    cuando no pudo procesar la solicitud CFE.
+
+    Ejemplo:
+    Tuvimos un problema procesando tu solicitud
+    para el servicio 613790601205.
+    """
+
+    upper = str(
+        text or ""
+    ).upper()
+
+    normalized = re.sub(
+        r"\s+",
+        " ",
+        upper,
+    ).strip()
+
+    phrases = (
+        "TUVIMOS UN PROBLEMA PROCESANDO TU SOLICITUD",
+        "PROBLEMA PROCESANDO TU SOLICITUD",
+        "NO FUE POSIBLE PROCESAR TU SOLICITUD",
+        "NO PUDIMOS PROCESAR TU SOLICITUD",
+        "ERROR AL PROCESAR TU SOLICITUD",
+        "VERIFICA QUE SEA CORRECTO O INTENTA MAS TARDE",
+        "VERIFICA QUE SEA CORRECTO O INTENTA MÁS TARDE",
+    )
+
+    return any(
+        phrase in normalized
+        for phrase in phrases
+    )
+
+
 def extract_service_number_from_status_text(
     text: str,
 ) -> tuple[str, str | None]:
