@@ -29,8 +29,19 @@ def client_instance_allowed(db: Session, instance: str) -> tuple[bool, str]:
         return False, 'instance_not_registered'
     if bot.is_blocked:
         return False, 'bot_blocked'
-    if bot.limit_total > 0 and bot.used_total >= bot.limit_total:
-        return False, 'limit_exhausted'
+    cfe_limit = int(
+        bot.cfe_limit or 0
+    )
+    
+    cfe_used = int(
+        bot.cfe_used or 0
+    )
+    
+    if (
+        cfe_limit > 0
+        and cfe_used >= cfe_limit
+    ):
+        return False, "limit_exhausted"
     return True, 'ok'
 
 
